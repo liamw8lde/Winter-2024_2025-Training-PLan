@@ -184,38 +184,69 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
     ]
 )
 
-# --- 🗓️ Wochenplan (aktuelle KW zuerst) ---
+# --- 🗓️ Wochenplan (Buttons, kein DataFrame) ---
 with tab1:
-    st.subheader("Wochenplan (aktuelle Kalenderwoche zuerst)")
+    st.subheader("Wochenplan")
+
     if df.empty:
         st.info("Keine Einträge.")
     else:
+        # Hilfsfunktionen fürs Sortieren/Parsen
+        def slot_key(s: str):
+            m = SLOT_RE.match(str(s))
+            if not m:
+                return (99, 99)
+            return (int(m.group(2)), int(m.group(3)))  # hh, mm
+
         df["KW"] = df["Date"].apply(lambda d: pd.Timestamp(d).isocalendar().week)
         df["Jahr"] = df["Date"].apply(lambda d: pd.Timestamp(d).isocalendar().year)
 
-        # Aktuelle KW ermitteln
+        # verfügbare Wochen (Jahr, KW)
+        weeks = sorted({(int(r["Jahr"]), int(r["KW"])) for _, r in df.iterrows()})
+
+        # aktuelle KW bestimmen
         today = pd.Timestamp.today().date()
-        kw_now = pd.Timestamp(today).isocalendar().week
-        jahr_now = pd.Timestamp(today).isocalendar().year
+        kw_now  = pd.Timestamp(today).isocalendar().week
+        yr_now  = pd.Timestamp(today).isocalendar().year
 
-        # verfügbare KWs (Jahr, KW) sortiert
-        kws = sorted({(int(r["Jahr"]), int(r["KW"])) for _, r in df.iterrows()})
-        # Vorauswahl: aktuelle KW falls vorhanden, sonst die nächste/fürheste
-        if (jahr_now, kw_now) in kws:
-            preselect = (jahr_now, kw_now)
-        else:
-            # nächste KW größer als heute oder fallback auf kleinste
-            future = [x for x in kws if (x[0] > jahr_now or (x[0] == jahr_now and x[1] >= kw_now))]
-            preselect = future[0] if future else kws[0]
+        # initiale Woche wählen (heutige, sonst nächste/erste)
+        if "week_idx" not in st.session_state:
+            if (yr_now, kw_now) in weeks:
+                st.session_state.week_idx = weeks.index((yr_now, kw_now))
+            else:
+                future = [i for i, wk in enumerate(weeks) if wk > (yr_now, kw_now)]
+                st.session_state.week_idx = future[0] if future else 0
 
-        # Anzeige
-        show_year, show_kw = preselect
+        # Navigation
+        left, mid, right = st.columns([1, 6, 1])
+        prev_disabled = st.session_state.week_idx <= 0
+        next_disabled = st.session_state.week_idx >= len(weeks) - 1
+
+        if left.button("◀️ Zurück", use_container_width=True, disabled=prev_disabled):
+            st.session_state.week_idx -= 1
+        if right.button("Weiter ▶️", use_container_width=True, disabled=next_disabled):
+            st.session_state.week_idx += 1
+
+        show_year, show_kw = weeks[st.session_state.week_idx]
         week_df = df[(df["Jahr"] == show_year) & (df["KW"] == show_kw)].copy()
-        week_df = week_df[["Date", "Day", "Slot", "Typ", "Players"]].rename(
-            columns={"Date": "Datum", "Day": "Tag", "Players": "Spieler"}
-        )
-        st.markdown(f"**Kalenderwoche {show_kw}, {show_year}**")
-        st.dataframe(week_df, use_container_width=True, hide_index=True, height=420)
+        week_df = week_df.sort_values(["Date", "Slot"], key=lambda c: c.map(slot_key) if c.name=="Slot" else c)
+
+        st.markdown(f"### Kalenderwoche {show_kw}, {show_year}")
+
+        # Darstellung ohne Tabelle – pro Tag Abschnitt mit Slots als Liste
+        for the_date in sorted(week_df["Date"].unique()):
+            day_name = week_df.loc[week_df["Date"] == the_date, "Day"].iloc[0]
+            st.markdown(f"**{day_name}, {the_date:%Y-%m-%d}**")
+
+            day_rows = week_df[week_df["Date"] == the_date]
+            for _, r in day_rows.iterrows():
+                players_text = (
+                    r["Players"] if "/" in str(r["Players"]) else " / ".join(r["PlayerList"])
+                )
+                art = "Einzel" if r["Typ"] == "Einzel" else "Doppel"
+                st.markdown(f"- `{r['Slot']}` — *{art}*  \n  {players_text}")
+
+            st.divider()
 
 # --- 👤 Einzelspieler ---
 with tab2:
@@ -312,3 +343,4 @@ with tab5:
         file_name="Herren_40-50-60_Raster.csv",
         mime="text/csv",
     )
+
