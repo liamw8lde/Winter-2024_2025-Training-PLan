@@ -33,7 +33,7 @@ def minutes(code):
     return p["mins"] if p else 0
 
 # ---------- data loader (hard-wired GitHub RAW) ----------
-GH_RAW_DEFAULT = "https://github.com/liamw8lde/Winter-2024_2025-Training-PLan/blob/main/trainplan.xlsx"  # <- change if needed
+GH_RAW_DEFAULT = "https://github.com/liamw8lde/Winter-2024_2025-Training-PLan/blob/67355fb4c53e8e7baafd43dd871f55bc4451b122/trainplan.xlsx"  # <- change if needed
 
 @st.cache_data(show_spinner=False)
 def load_plan(url: str):
@@ -157,4 +157,5 @@ with tab4:
         st.dataframe(cost_df.sort_values(["Spieler","Datum","Slot"]), use_container_width=True, height=420)
     else:
         st.info("Keine Einträge gefunden.")
+
 
