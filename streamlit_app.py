@@ -23,7 +23,7 @@ HOURLY_RATE = 17.50  # € pro Stunde (Platzmiete)
 SLOT_RE = re.compile(r"^([DE])(\d{2}):(\d{2})-([0-9]+)\s+PL([AB])$", re.IGNORECASE)
 
 # ---------- Datenquelle ----------
-GH_RAW_DEFAULT = "https://github.com/liamw8lde/Winter-2024_2025-Training-PLan/blob/ce48f429bcc512d9b4af59fd00be2593c1ac3bf2/trainplan.xlsx"  # <-- anpassen
+GH_RAW_DEFAULT = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/trainplan.xlsx"  # <-- anpassen
 gh_raw_url = st.sidebar.text_input(
     "GitHub RAW URL (optional)",
     value="",
@@ -312,5 +312,3 @@ with tab5:
         file_name="Herren_40-50-60_Raster.csv",
         mime="text/csv",
     )
-
-
