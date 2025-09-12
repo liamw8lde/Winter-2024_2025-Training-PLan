@@ -91,7 +91,14 @@ df["Start"] = df["Slot"].apply(slot_time_str)
 df = df.sort_values(["Date","Start","Slot"])
 all_players = sorted({p for L in df["PlayerList"] for p in L}, key=lambda s: norm(s).lower())
 
-tab1, tab2, tab3, tab4 = st.tabs(["📆 Wochenplan", "👤 Spieler", "📄 Kompletter Plan", "💶 Spieler-Kosten"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "🗓️ Wochenplan",
+    "👤 Einzelspieler",
+    "📋 Komplettplan",
+    "💶 Kosten",
+    "🧱 Raster (Herren 40–50–60)"
+])
+
 
 # --- 📆 Wochenplan (current week by default; prev/next buttons) ---
 with tab1:
@@ -188,6 +195,20 @@ with tab4:
                      use_container_width=True, height=420)
     else:
         st.info("Keine Einträge gefunden.")
+with tab5:
+    st.subheader("Herren 40–50–60 – Rasteransicht")
+    # Use the same effective URL you pass to your other loaders (e.g. url or GH_RAW_DEFAULT)
+    grid_df = load_grid(source_url)   # replace source_url with your variable
+    st.dataframe(
+        grid_df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # Optional: allow download
+    csv = grid_df.to_csv(index=False).encode("utf-8")
+    st.download_button("CSV herunterladen", data=csv, file_name="Herren_40-50-60_Raster.csv", mime="text/csv")
+
 
 
 
