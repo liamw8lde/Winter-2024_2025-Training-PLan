@@ -150,48 +150,46 @@ with tab3:
 with tab4:
     st.subheader("Spieler-Kosten (17,50 € pro Platz-Stunde)")
 
-    HOURLY_RATE = 17.50  # feste Platzmiete je Stunde, unabhängig von Platz A/B
+    HOURLY_RATE = 17.50
 
-    def slot_cost_total(code: str) -> float:
-        p = parse_slot(code)
-        return (p["mins"]/60.0) * HOURLY_RATE if p else 0.0
+    def parse_slot(code: str):
+        m = re.match(r"^([DE])(\d{2}):(\d{2})-([0-9]+)\s+PL([AB])$", str(code or ""), re.I)
+        if not m: return None
+        return {"kind": m.group(1).upper(), "mins": int(m.group(4))}
 
     rows = []
     for _, r in df.iterrows():
-        total = slot_cost_total(r["Slot"])
-        n_players = 2 if r["Typ"] == "Einzel" else 4
-        share = total / n_players if n_players else 0.0
+        p = parse_slot(r["Slot"])
+        if not p: 
+            continue
+        total = (p["mins"]/60.0) * HOURLY_RATE
+        n = 2 if r["Typ"] == "Einzel" else 4
+        share = total / n
         for pl in r["PlayerList"]:
             rows.append({
-                "Spieler": pl,
-                "Datum": r["Date"],
-                "Tag": r["Day"],
-                "Typ": r["Typ"],
-                "Slot": r["Slot"],
-                "Minuten": minutes_of(r["Slot"]),
-                "Gesamtkosten Slot (€)": round(total, 2),
-                "Anteil Spieler (€)": round(share, 2),
+                "Spieler": pl, "Datum": r["Date"], "Tag": r["Day"], "Typ": r["Typ"],
+                "Slot": r["Slot"], "Minuten": p["mins"],
+                "Kosten Slot (€)": round(total, 2),
+                "Anteil Spieler (€)": round(share, 2)
             })
 
     cost_df = pd.DataFrame(rows)
-
     if len(cost_df):
-        agg = (cost_df
-               .groupby("Spieler", as_index=False)
+        agg = (cost_df.groupby("Spieler", as_index=False)
                .agg(Teilnahmen=("Anteil Spieler (€)", "count"),
                     Minuten=("Minuten", "sum"),
                     Summe=("Anteil Spieler (€)", "sum"))
                .sort_values(["Summe", "Spieler"], ascending=[False, True]))
-
         st.markdown("**Gesamt je Spieler**")
         st.dataframe(agg, use_container_width=True, height=360)
-
         st.markdown("—")
         st.markdown("**Details je Einsatz**")
-        st.dataframe(cost_df.sort_values(["Spieler", "Datum", "Slot"]),
+        st.dataframe(cost_df.sort_values(["Spieler","Datum","Slot"]),
                      use_container_width=True, height=420)
     else:
         st.info("Keine Einträge gefunden.")
+
+
 
 
 
