@@ -144,39 +144,43 @@ with tab3:
                  .rename(columns={"Date":"Datum","Day":"Tag","Players":"Spieler"}),
                  use_container_width=True, height=700)
 
-# --- 💶 Spieler-Kosten ---
+# --- 💶 Spieler-Kosten (fix: always €17.50 per appearance) ---
 with tab4:
-    st.subheader("Spieler-Kosten (anteilig)")
-    c1, c2 = st.columns(2)
-    with c1:
-        rate_pla = st.number_input("Kosten €/Stunde (PLA)", value=0.0, step=1.0)
-    with c2:
-        rate_plb = st.number_input("Kosten €/Stunde (PLB)", value=0.0, step=1.0)
+    st.subheader("Spieler-Kosten (fix €17.50 je Teilnahme)")
 
-    def slot_cost_eur(code: str) -> float:
-        p = parse_slot(code)
-        if not p: return 0.0
-        rate = rate_pla if p["court"] == "A" else rate_plb
-        return (p["mins"] / 60.0) * float(rate)
+    PRICE_PER_PLAYER = 17.50  # <- constant price per person per slot
 
-    rows=[]
-    for _,r in df.iterrows():
-        n = 2 if r["Typ"] == "Einzel" else 4
-        share = slot_cost_eur(r["Slot"]) / n if n else 0.0
+    rows = []
+    for _, r in df.iterrows():
         for pl in r["PlayerList"]:
-            rows.append({"Spieler": pl, "Datum": r["Date"], "Tag": r["Day"],
-                         "Typ": r["Typ"], "Slot": r["Slot"],
-                         "Minuten": minutes_of(r["Slot"]), "Anteil €": round(share,2)})
+            rows.append({
+                "Spieler": pl,
+                "Datum": r["Date"],
+                "Tag": r["Day"],
+                "Typ": r["Typ"],
+                "Slot": r["Slot"],
+                "Anteil €": PRICE_PER_PLAYER
+            })
+
     cost_df = pd.DataFrame(rows)
+
     if len(cost_df):
         agg = (cost_df.groupby("Spieler", as_index=False)
-               .agg({"Minuten":"sum","Anteil €":"sum"})
-               .sort_values(["Anteil €","Spieler"], ascending=[False, True]))
+               .agg({"Anteil €": "sum", "Spieler": "count"})
+               .rename(columns={"Spieler": "Teilnahmen"}))  # 'Spieler' col was used as key in groupby
+        # Fix the rename side-effect: recompute properly
+        agg = (cost_df.groupby("Spieler", as_index=False)
+               .agg(Teilnahmen=("Anteil €", "count"),
+                    Summe=("Anteil €", "sum"))
+               .sort_values(["Summe", "Spieler"], ascending=[False, True]))
+
         st.markdown("**Gesamt je Spieler**")
         st.dataframe(agg, use_container_width=True, height=360)
+
         st.markdown("—")
         st.markdown("**Details**")
-        st.dataframe(cost_df.sort_values(["Spieler","Datum","Slot"]),
+        st.dataframe(cost_df.sort_values(["Spieler", "Datum", "Slot"]),
                      use_container_width=True, height=420)
     else:
         st.info("Keine Einträge gefunden.")
+
