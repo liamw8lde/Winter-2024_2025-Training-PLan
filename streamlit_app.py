@@ -10,6 +10,9 @@ import requests
 import pandas as pd
 import streamlit as st
 from datetime import date
+from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+import json
+
 
 # ---------- Seite / Layout ----------
 st.set_page_config(
@@ -161,6 +164,72 @@ def expand_per_player(df_plan: pd.DataFrame) -> pd.DataFrame:
 def df_week_key(d: date):
     iso = pd.Timestamp(d).isocalendar()
     return int(iso.week), int(iso.year)
+
+# Farbpalette analog "Legende"
+PALETTE = {
+    "D20:00-120 PLA": "1D4ED8", "D20:00-120 PLB": "F59E0B",
+    "D20:00-90 PLA":  "6D28D9", "D20:00-90 PLB":  "C4B5FD",
+    "D20:30-90 PLA":  "6D28D9", "D20:30-90 PLB":  "C4B5FD",
+    "D19:00-120 PLB": "C4B5FD", "D18:00-120 PLA": "6D28D9",
+
+    "E18:00-60 PLA":  "10B981",
+    "E19:00-60 PLA":  "14B8A6", "E19:00-60 PLB":  "14B8A6",
+    "E20:00-90 PLA":  "0EA5E9", "E20:00-90 PLB":  "0EA5E9",
+    "E20:30-90 PLA":  "10B981", "E20:30-90 PLB":  "10B981",
+}
+
+CELLSTYLE = JsCode(f"""
+function(params) {{
+  if (!params.value) {{ return {{}}; }}
+  const v = String(params.value).trim();
+  const pat = /^([DE])\\d{{2}}:\\d{{2}}-\\d+\\s+PL[AB]$/;
+  if (!pat.test(v)) {{ return {{}}; }}
+  const pal = {json.dumps(PALETTE)};
+  const hex = pal[v] || "6B7280";  // default gray
+  const bg  = "#" + hex;
+
+  // quick luminance approx for text color
+  const r = parseInt(hex.substr(0,2),16)/255.0;
+  const g = parseInt(hex.substr(2,2),16)/255.0;
+  const b = parseInt(hex.substr(4,2),16)/255.0;
+  const lum = 0.2126*r + 0.7152*g + 0.0722*b;
+  const fg  = (lum < 0.55) ? "white" : "black";
+
+  return {{
+    backgroundColor: bg,
+    color: fg,
+    fontWeight: "600",
+    textAlign: "center",
+    borderRight: "1px solid #eee",
+  }};
+}}
+""")
+
+def show_raster_aggrid(grid_df: pd.DataFrame):
+    gb = GridOptionsBuilder.from_dataframe(grid_df)
+    gb.configure_default_column(
+        resizable=True,
+        wrapText=True,
+        autoHeight=True,
+        cellStyle=CELLSTYLE
+    )
+    gb.configure_column("Datum", pinned="left", width=120)
+    gb.configure_column("Tag",   pinned="left", width=110)
+
+    # kleinere Spaltenbreite für Spieler-Zellen
+    for col in grid_df.columns[2:]:
+        gb.configure_column(col, width=150)
+
+    go = gb.build()
+    AgGrid(
+        grid_df,
+        gridOptions=go,
+        allow_unsafe_jscode=True,   # needed for custom cellStyle
+        fit_columns_on_grid_load=False,
+        height=560,
+        theme="balham"              # clean, kontrastreich
+    )
+
 
 
 # ---------- Daten laden ----------
@@ -334,13 +403,16 @@ with tab4:
 # --- 🧱 Raster (Herren 40–50–60) ---
 with tab5:
     st.subheader("Herren 40–50–60 – Rasteransicht")
-    st.dataframe(grid_df, use_container_width=True, hide_index=True, height=520)
-
-    csv_grid = grid_df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        "Raster als CSV herunterladen",
-        data=csv_grid,
-        file_name="Herren_40-50-60_Raster.csv",
-        mime="text/csv",
+    # kleine Legende
+    st.markdown(
+        "Legende:&nbsp; "
+        "<span style='background:#1D4ED8;color:#fff;padding:2px 6px;border-radius:6px;'>D20:00-120 PLA</span> "
+        "<span style='background:#F59E0B;color:#000;padding:2px 6px;border-radius:6px;'>D20:00-120 PLB</span> "
+        "<span style='background:#0EA5E9;color:#000;padding:2px 6px;border-radius:6px;'>E20:00-90 PLA/PLB</span> "
+        "<span style='background:#10B981;color:#000;padding:2px 6px;border-radius:6px;'>E18:00-60</span> ",
+        unsafe_allow_html=True
     )
+    show_raster_aggrid(grid_df)
+
+
 
