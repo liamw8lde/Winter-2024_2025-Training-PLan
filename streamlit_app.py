@@ -4,7 +4,11 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="🎾 Winter-Training Plan", layout="wide")
+st.set_page_config(page_title="🎾 Wintertraining – Online-Spielplan", page_icon="🎾", layout="wide")
+
+st.title("🎾 Wintertraining – Online-Spielplan")
+st.caption("Wochenansicht, Einzelspieler, kompletter Plan & Kostenübersicht.")
+
 
 # ---- CONFIG: set your RAW GitHub URL here ----
 GH_RAW_DEFAULT = "https://raw.githubusercontent.com/liamw8lde/winter-2024_2025-training-plan/main/trainplan.xlsx"
@@ -144,14 +148,21 @@ with tab3:
                  .rename(columns={"Date":"Datum","Day":"Tag","Players":"Spieler"}),
                  use_container_width=True, height=700)
 
-# --- 💶 Spieler-Kosten (fix: always €17.50 per appearance) ---
+# --- 💶 Spieler-Kosten (17,50 € pro Platz-Stunde) ---
 with tab4:
-    st.subheader("Spieler-Kosten (fix €17.50 je Teilnahme)")
+    st.subheader("Spieler-Kosten (17,50 € pro Platz-Stunde)")
 
-    PRICE_PER_PLAYER = 17.50  # <- constant price per person per slot
+    HOURLY_RATE = 17.50  # feste Platzmiete je Stunde, unabhängig von Platz A/B
+
+    def slot_cost_total(code: str) -> float:
+        p = parse_slot(code)
+        return (p["mins"]/60.0) * HOURLY_RATE if p else 0.0
 
     rows = []
     for _, r in df.iterrows():
+        total = slot_cost_total(r["Slot"])
+        n_players = 2 if r["Typ"] == "Einzel" else 4
+        share = total / n_players if n_players else 0.0
         for pl in r["PlayerList"]:
             rows.append({
                 "Spieler": pl,
@@ -159,26 +170,26 @@ with tab4:
                 "Tag": r["Day"],
                 "Typ": r["Typ"],
                 "Slot": r["Slot"],
-                "Anteil €": PRICE_PER_PLAYER
+                "Minuten": minutes_of(r["Slot"]),
+                "Gesamtkosten Slot (€)": round(total, 2),
+                "Anteil Spieler (€)": round(share, 2),
             })
 
     cost_df = pd.DataFrame(rows)
 
     if len(cost_df):
-        agg = (cost_df.groupby("Spieler", as_index=False)
-               .agg({"Anteil €": "sum", "Spieler": "count"})
-               .rename(columns={"Spieler": "Teilnahmen"}))  # 'Spieler' col was used as key in groupby
-        # Fix the rename side-effect: recompute properly
-        agg = (cost_df.groupby("Spieler", as_index=False)
-               .agg(Teilnahmen=("Anteil €", "count"),
-                    Summe=("Anteil €", "sum"))
+        agg = (cost_df
+               .groupby("Spieler", as_index=False)
+               .agg(Teilnahmen=("Anteil Spieler (€)", "count"),
+                    Minuten=("Minuten", "sum"),
+                    Summe=("Anteil Spieler (€)", "sum"))
                .sort_values(["Summe", "Spieler"], ascending=[False, True]))
 
         st.markdown("**Gesamt je Spieler**")
         st.dataframe(agg, use_container_width=True, height=360)
 
         st.markdown("—")
-        st.markdown("**Details**")
+        st.markdown("**Details je Einsatz**")
         st.dataframe(cost_df.sort_values(["Spieler", "Datum", "Slot"]),
                      use_container_width=True, height=420)
     else:
