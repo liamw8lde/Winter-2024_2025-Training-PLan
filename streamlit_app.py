@@ -1,216 +1,314 @@
-# streamlit_app.py — viewer-only, no sidebar
-import io, re, unicodedata, requests
-from datetime import date
+# streamlit_app.py
+# ------------------------------------------------------------
+# Winter-Training – Viewer (Deutsch)
+# Tabs: Wochenplan (KW-Ansicht), Einzelspieler, Komplettplan,
+#       Kosten (17,50 €/h korrekt umgelegt), Raster (Herren 40–50–60)
+# ------------------------------------------------------------
+import io
+import re
+import requests
 import pandas as pd
 import streamlit as st
+from datetime import date
 
-st.set_page_config(page_title="🎾 Wintertraining – Online-Spielplan", page_icon="🎾", layout="wide")
-st.caption("Wochenansicht, Einzelspieler, kompletter Plan & Kostenübersicht.")
+# ---------- Seite / Layout ----------
+st.set_page_config(
+    page_title="Winter-Training Herren 40–50–60",
+    page_icon="🎾",
+    layout="wide",
+)
 
-
-# ---- CONFIG: set your RAW GitHub URL here ----
-GH_RAW_DEFAULT = "https://raw.githubusercontent.com/liamw8lde/winter-2024_2025-training-plan/main/trainplan.xlsx"
-
+# ---------- Konstanten ----------
+HOURLY_RATE = 17.50  # € pro Stunde (Platzmiete)
 SLOT_RE = re.compile(r"^([DE])(\d{2}):(\d{2})-([0-9]+)\s+PL([AB])$", re.IGNORECASE)
 
-def norm(s):
-    s = str(s or "").strip()
-    s = ''.join(c for c in unicodedata.normalize('NFKD', s) if not unicodedata.combining(c))
-    return re.sub(r"\s+"," ",s)
+# ---------- Datenquelle ----------
+GH_RAW_DEFAULT = "https://raw.githubusercontent.com/<USER>/<REPO>/main/trainplan.xlsx"  # <-- anpassen
+gh_raw_url = st.sidebar.text_input(
+    "GitHub RAW URL (optional)",
+    value="",
+    placeholder=GH_RAW_DEFAULT,
+)
+SOURCE_URL = gh_raw_url.strip() or GH_RAW_DEFAULT
 
-def parse_slot(code):
-    m = SLOT_RE.match(str(code or ""))
-    if not m: return None
-    return {"kind": m.group(1).upper(), "hh": int(m.group(2)),
-            "mm": int(m.group(3)), "mins": int(m.group(4)),
-            "court": m.group(5).upper()}  # 'A' or 'B'
 
-def slot_time_str(code):
-    p = parse_slot(code);  return f"{p['hh']:02d}:{p['mm']:02d}" if p else "?"
+# ---------- Loader ----------
+@st.cache_data(show_spinner=True)
+def fetch_bytes(url: str) -> bytes:
+    if not url.startswith("http"):
+        # Falls lokal geladen werden soll, kann man hier eine Datei öffnen.
+        # Für Streamlit Cloud wird typischerweise die RAW-URL genutzt.
+        raise ValueError("Bitte eine GitHub RAW URL angeben.")
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+    return resp.content
 
-def minutes_of(code):
-    p = parse_slot(code);  return p["mins"] if p else 0
 
 @st.cache_data(show_spinner=False)
 def load_plan(url: str) -> pd.DataFrame:
-    r = requests.get(url)
-    if r.status_code != 200:
-        raise ValueError(f"HTTP {r.status_code} for {url}")
-    data = r.content
-    if not data.startswith(b"PK"):
-        raise ValueError("Downloaded file is not .xlsx (likely an HTML page). Use RAW link.")
-    # Prefer Spielplan
+    """
+    Läd bevorzugt das Blatt 'Spielplan'.
+    Fallback: extrahiert aus dem Raster 'Herren 40–50–60' alle belegten Slots.
+    Gibt immer Spalten zurück: Date, Day, Slot, Typ, Players, PlayerList
+    """
+    data = fetch_bytes(url)
+    xio = io.BytesIO(data)
+
+    # 1) Versuch: "Spielplan"
     try:
-        df = pd.read_excel(io.BytesIO(data), sheet_name="Spielplan")
+        df = pd.read_excel(xio, sheet_name="Spielplan")
         cols = {c.lower(): c for c in df.columns}
-        df = df.rename(columns={
-            cols.get("datum","Datum"): "Date",
-            cols.get("tag","Tag"): "Day",
-            cols.get("slot","Slot"): "Slot",
-            cols.get("spieler","Spieler"): "Spieler",
-            cols.get("typ","Typ"): "Typ"
-        })
-        df["Date"] = pd.to_datetime(df["Date"]).dt.date
-        df["Players"] = df.get("Spieler","")
-        if "Typ" not in df: df["Typ"] = df["Slot"].apply(lambda s: "Einzel" if str(s).startswith("E") else "Doppel")
+        df = df.rename(
+            columns={
+                cols.get("datum", "Datum"): "Date",
+                cols.get("tag", "Tag"): "Day",
+                cols.get("slot", "Slot"): "Slot",
+                cols.get("spieler", "Spieler"): "Players",
+                cols.get("typ", "Typ" if "Typ" in df.columns else cols.get("art", "Typ")): "Typ",
+            }
+        )
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.date
+        if "Typ" not in df:
+            df["Typ"] = df["Slot"].apply(lambda s: "Einzel" if str(s).startswith("E") else "Doppel")
     except Exception:
-        # Fallback: grid
-        grid = pd.read_excel(io.BytesIO(data), sheet_name="Herren 40–50–60", header=[1])
-        grid = grid.rename(columns={grid.columns[0]:"Date", grid.columns[1]:"Day"})
+        # 2) Fallback aus dem Raster
+        xio.seek(0)
+        grid = pd.read_excel(xio, sheet_name="Herren 40–50–60", header=[1], dtype=str)
+        grid = grid.rename(columns={grid.columns[0]: "Date", grid.columns[1]: "Day"})
+        grid["Date"] = pd.to_datetime(grid["Date"], errors="coerce").dt.date
         players = list(grid.columns[2:])
-        rows=[]
-        for _,row in grid.iterrows():
-            dd = pd.to_datetime(row["Date"]).date()
-            day = str(row["Day"])
+        rows = []
+        for _, r in grid.iterrows():
+            dd = r["Date"]
+            day = r["Day"]
             for p in players:
-                code = str(row.get(p,"") or "").strip()
+                code = str(r.get(p, "") or "").strip()
                 if SLOT_RE.match(code):
-                    rows.append({"Date": dd, "Day": day, "Slot": code,
-                                 "Typ": "Einzel" if code.startswith("E") else "Doppel",
-                                 "Players": p})
+                    rows.append(
+                        {
+                            "Date": dd,
+                            "Day": day,
+                            "Slot": code,
+                            "Typ": "Einzel" if code.startswith("E") else "Doppel",
+                            "Players": p,
+                        }
+                    )
         df = pd.DataFrame(rows)
-    # expand Players -> PlayerList
-    out=[]
-    for _,r in df.iterrows():
-        plist = [p.strip() for p in str(r["Players"]).split("/") if p.strip()]
-        out.append({**r, "PlayerList": plist})
-    return pd.DataFrame(out)
 
-# ---------- UI (no sidebar) ----------
-st.title("🎾 Winter-Training – Plan (Viewer)")
+    # Normalisiere PlayerList (Liste der Namen je Zeile)
+    def to_list(s):
+        return [x.strip() for x in str(s).split("/") if str(x).strip()]
 
-# Load once; show a friendly error if RAW URL is wrong
+    df["PlayerList"] = df["Players"].apply(to_list)
+    # Einheitliches Sortieren (Datum, Startzeit)
+    def slot_key(s):
+        m = SLOT_RE.match(str(s))
+        if not m:
+            return (99, 99)
+        return (int(m.group(2)), int(m.group(3)))  # hh, mm
+    df = df.sort_values(["Date", "Slot"], key=lambda col: col.map(slot_key) if col.name == "Slot" else col)
+    return df
+
+
+@st.cache_data(show_spinner=False)
+def load_grid(url: str) -> pd.DataFrame:
+    """
+    Liest das Blatt 'Herren 40–50–60' (Kopfzeile = zweite Zeile im Excel).
+    Gibt Datum/Tag + Spieler-Spalten zurück.
+    """
+    data = fetch_bytes(url)
+    xio = io.BytesIO(data)
+    grid = pd.read_excel(xio, sheet_name="Herren 40–50–60", header=[1], dtype=str)
+    grid = grid.rename(columns={grid.columns[0]: "Datum", grid.columns[1]: "Tag"})
+    grid["Datum"] = pd.to_datetime(grid["Datum"], errors="coerce").dt.strftime("%Y-%m-%d")
+    # Spieler-Spalten in ursprünglicher Reihenfolge belassen:
+    player_cols = [c for c in grid.columns if c not in ("Datum", "Tag")]
+    grid = grid[["Datum", "Tag"] + player_cols]
+    return grid
+
+
+# ---------- Hilfen ----------
+def parse_slot(code: str):
+    m = SLOT_RE.match(str(code or ""))
+    if not m:
+        return None
+    kind = m.group(1).upper()
+    hh, mm = int(m.group(2)), int(m.group(3))
+    dur = int(m.group(4))
+    return {"kind": kind, "start": f"{hh:02d}:{mm:02d}", "minutes": dur}
+
+
+def expand_per_player(df_plan: pd.DataFrame) -> pd.DataFrame:
+    """Explodiert jede Spielplan-Zeile auf einzelne Spieler (mit Partner/Gegner)."""
+    rows = []
+    for _, r in df_plan.iterrows():
+        plist = r["PlayerList"]
+        for p in plist:
+            others = [x for x in plist if x != p]
+            rows.append(
+                {
+                    "Spieler": p,
+                    "Datum": r["Date"],
+                    "Tag": r["Day"],
+                    "Typ": r["Typ"],
+                    "Slot": r["Slot"],
+                    "Partner/Gegner": " / ".join(others),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def df_week_key(d: date):
+    iso = pd.Timestamp(d).isocalendar()
+    return int(iso.week), int(iso.year)
+
+
+# ---------- Daten laden ----------
 try:
-    df = load_plan(GH_RAW_DEFAULT)
+    df = load_plan(SOURCE_URL)
+    grid_df = load_grid(SOURCE_URL)
 except Exception as e:
-    st.error(f"Plan konnte nicht geladen werden: {e}")
+    st.error(f"Plan konnte nicht geladen werden.\n\nFehler: {e}")
     st.stop()
 
-# Precompute ordering & helpers
-df["Start"] = df["Slot"].apply(slot_time_str)
-df = df.sort_values(["Date","Start","Slot"])
-all_players = sorted({p for L in df["PlayerList"] for p in L}, key=lambda s: norm(s).lower())
+per_player = expand_per_player(df)
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "🗓️ Wochenplan",
-    "👤 Einzelspieler",
-    "📋 Komplettplan",
-    "💶 Kosten",
-    "🧱 Raster (Herren 40–50–60)"
-])
+# ---------- Tabs ----------
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    [
+        "🗓️ Wochenplan",
+        "👤 Einzelspieler",
+        "📋 Komplettplan",
+        "💶 Kosten",
+        "🧱 Raster (Herren 40–50–60)",
+    ]
+)
 
-
-# --- 📆 Wochenplan (current week by default; prev/next buttons) ---
+# --- 🗓️ Wochenplan (aktuelle KW zuerst) ---
 with tab1:
-    st.subheader("Wochenplan")
-    def week_key(d):
-        iso = pd.Timestamp(d).isocalendar()
-        return (int(iso.year), int(iso.week))
-    all_dates = sorted(df["Date"].unique())
-    if not all_dates:
-        st.info("Keine Termine im Plan."); st.stop()
-    wk_to_dates = {}
-    for d in all_dates:
-        wk_to_dates.setdefault(week_key(d), []).append(d)
-    today = date.today()
-    current = week_key(today)
-    if "wk_idx" not in st.session_state:
-        keys = sorted(wk_to_dates.keys())
-        default = current if current in wk_to_dates else (next((k for k in keys if min(wk_to_dates[k]) >= today), keys[-1]))
-        st.session_state.wk_idx = keys.index(default)
-    cols = st.columns([1,1,3,1,1])
-    with cols[0]:
-        if st.button("← Vorherige"):
-            st.session_state.wk_idx = max(0, st.session_state.wk_idx - 1)
-    with cols[4]:
-        if st.button("Nächste →"):
-            st.session_state.wk_idx = min(len(wk_to_dates)-1, st.session_state.wk_idx + 1)
-    keys = sorted(wk_to_dates.keys())
-    yr, wk = keys[st.session_state.wk_idx]
-    st.markdown(f"**KW {wk:02d} – {yr}**")
-    show = df[df["Date"].isin(sorted(wk_to_dates[(yr, wk)]))]
-    for d, grp in show.groupby("Date"):
-        st.markdown(f"### {pd.Timestamp(d).strftime('%a, %d.%m.%Y')}")
-        for _,r in grp.iterrows():
-            players = " · ".join(r["PlayerList"])
-            st.write(f"- {r['Start']}  |  **{r['Typ']}**  |  {r['Slot']}  |  {players}")
-        st.markdown("---")
+    st.subheader("Wochenplan (aktuelle Kalenderwoche zuerst)")
+    if df.empty:
+        st.info("Keine Einträge.")
+    else:
+        df["KW"] = df["Date"].apply(lambda d: pd.Timestamp(d).isocalendar().week)
+        df["Jahr"] = df["Date"].apply(lambda d: pd.Timestamp(d).isocalendar().year)
 
-# --- 👤 Spieler ---
+        # Aktuelle KW ermitteln
+        today = pd.Timestamp.today().date()
+        kw_now = pd.Timestamp(today).isocalendar().week
+        jahr_now = pd.Timestamp(today).isocalendar().year
+
+        # verfügbare KWs (Jahr, KW) sortiert
+        kws = sorted({(int(r["Jahr"]), int(r["KW"])) for _, r in df.iterrows()})
+        # Vorauswahl: aktuelle KW falls vorhanden, sonst die nächste/fürheste
+        if (jahr_now, kw_now) in kws:
+            preselect = (jahr_now, kw_now)
+        else:
+            # nächste KW größer als heute oder fallback auf kleinste
+            future = [x for x in kws if (x[0] > jahr_now or (x[0] == jahr_now and x[1] >= kw_now))]
+            preselect = future[0] if future else kws[0]
+
+        # Anzeige
+        show_year, show_kw = preselect
+        week_df = df[(df["Jahr"] == show_year) & (df["KW"] == show_kw)].copy()
+        week_df = week_df[["Date", "Day", "Slot", "Typ", "Players"]].rename(
+            columns={"Date": "Datum", "Day": "Tag", "Players": "Spieler"}
+        )
+        st.markdown(f"**Kalenderwoche {show_kw}, {show_year}**")
+        st.dataframe(week_df, use_container_width=True, hide_index=True, height=420)
+
+# --- 👤 Einzelspieler ---
 with tab2:
-    st.subheader("Einzelner Spieler")
-    me = st.selectbox("Spieler wählen", all_players)
-    mine = df[df["PlayerList"].apply(lambda L: me in L)]
-    st.write(f"Gefundene Termine: **{len(mine)}**")
-    st.dataframe(mine[["Date","Day","Start","Typ","Slot","Players"]]
-                 .rename(columns={"Date":"Datum","Day":"Tag","Players":"Mitspieler"}),
-                 use_container_width=True, height=420)
+    st.subheader("Einzelspieler – Einsätze")
+    all_players = sorted(set([p for plist in df["PlayerList"] for p in plist]))
+    sel = st.selectbox("Spieler", options=all_players, index=0 if all_players else None)
+    if sel:
+        mine = per_player[per_player["Spieler"] == sel].copy()
+        mine = mine.rename(columns={"Datum": "Datum", "Tag": "Tag", "Slot": "Slot", "Typ": "Art"})
+        if mine.empty:
+            st.info("Keine Einsätze gefunden.")
+        else:
+            st.dataframe(
+                mine[["Datum", "Tag", "Art", "Slot", "Partner/Gegner"]],
+                use_container_width=True,
+                hide_index=True,
+                height=460,
+            )
 
-# --- 📄 Kompletter Plan ---
+# --- 📋 Komplettplan ---
 with tab3:
-    st.subheader("Kompletter Plan")
-    st.dataframe(df[["Date","Day","Start","Typ","Slot","Players"]]
-                 .rename(columns={"Date":"Datum","Day":"Tag","Players":"Spieler"}),
-                 use_container_width=True, height=700)
+    st.subheader("Komplettplan (alle Einträge)")
+    full = df.rename(columns={"Date": "Datum", "Day": "Tag", "Players": "Spieler"})
+    st.dataframe(full[["Datum", "Tag", "Slot", "Typ", "Spieler"]], use_container_width=True, hide_index=True)
 
-# --- 💶 Spieler-Kosten (17,50 € pro Platz-Stunde) ---
+    csv = full[["Datum", "Tag", "Slot", "Typ", "Spieler"]].to_csv(index=False).encode("utf-8")
+    st.download_button("CSV herunterladen", data=csv, file_name="Komplettplan.csv", mime="text/csv")
+
+# --- 💶 Kosten (17,50 €/h korrekt) ---
 with tab4:
     st.subheader("Spieler-Kosten (17,50 € pro Platz-Stunde)")
 
-    HOURLY_RATE = 17.50
-
-    def parse_slot(code: str):
-        m = re.match(r"^([DE])(\d{2}):(\d{2})-([0-9]+)\s+PL([AB])$", str(code or ""), re.I)
-        if not m: return None
-        return {"kind": m.group(1).upper(), "mins": int(m.group(4))}
-
+    # pro Einsatz aufsplitten
     rows = []
     for _, r in df.iterrows():
-        p = parse_slot(r["Slot"])
-        if not p: 
+        slot = SLOT_RE.match(str(r["Slot"]))
+        if not slot:
             continue
-        total = (p["mins"]/60.0) * HOURLY_RATE
+        minutes = int(slot.group(4))
+        kind = slot.group(1).upper()
+        total = (minutes / 60.0) * HOURLY_RATE
         n = 2 if r["Typ"] == "Einzel" else 4
         share = total / n
-        for pl in r["PlayerList"]:
-            rows.append({
-                "Spieler": pl, "Datum": r["Date"], "Tag": r["Day"], "Typ": r["Typ"],
-                "Slot": r["Slot"], "Minuten": p["mins"],
-                "Kosten Slot (€)": round(total, 2),
-                "Anteil Spieler (€)": round(share, 2)
-            })
-
+        for p in r["PlayerList"]:
+            rows.append(
+                {
+                    "Spieler": p,
+                    "Datum": r["Date"],
+                    "Tag": r["Day"],
+                    "Typ": r["Typ"],
+                    "Slot": r["Slot"],
+                    "Minuten": minutes,
+                    "Kosten Slot (€)": round(total, 2),
+                    "Anteil Spieler (€)": round(share, 2),
+                }
+            )
     cost_df = pd.DataFrame(rows)
-    if len(cost_df):
-        agg = (cost_df.groupby("Spieler", as_index=False)
-               .agg(Teilnahmen=("Anteil Spieler (€)", "count"),
-                    Minuten=("Minuten", "sum"),
-                    Summe=("Anteil Spieler (€)", "sum"))
-               .sort_values(["Summe", "Spieler"], ascending=[False, True]))
+
+    if cost_df.empty:
+        st.info("Keine Einträge vorhanden.")
+    else:
+        agg = (
+            cost_df.groupby("Spieler", as_index=False)
+            .agg(
+                Teilnahmen=("Anteil Spieler (€)", "count"),
+                Minuten=("Minuten", "sum"),
+                Summe=("Anteil Spieler (€)", "sum"),
+            )
+            .sort_values(["Summe", "Spieler"], ascending=[False, True])
+        )
         st.markdown("**Gesamt je Spieler**")
-        st.dataframe(agg, use_container_width=True, height=360)
+        st.dataframe(agg, use_container_width=True, hide_index=True, height=360)
+
         st.markdown("—")
         st.markdown("**Details je Einsatz**")
-        st.dataframe(cost_df.sort_values(["Spieler","Datum","Slot"]),
-                     use_container_width=True, height=420)
-    else:
-        st.info("Keine Einträge gefunden.")
+        cost_detail = cost_df.sort_values(["Spieler", "Datum", "Slot"]).rename(columns={"Datum": "Datum", "Tag": "Tag"})
+        st.dataframe(cost_detail, use_container_width=True, hide_index=True, height=420)
+
+        csv1 = agg.to_csv(index=False).encode("utf-8")
+        st.download_button("Kosten je Spieler – CSV", data=csv1, file_name="Kosten_pro_Spieler.csv", mime="text/csv")
+
+        csv2 = cost_detail.to_csv(index=False).encode("utf-8")
+        st.download_button("Kosten je Einsatz – CSV", data=csv2, file_name="Kosten_pro_Einsatz.csv", mime="text/csv")
+
+# --- 🧱 Raster (Herren 40–50–60) ---
 with tab5:
     st.subheader("Herren 40–50–60 – Rasteransicht")
-    # Use the same effective URL you pass to your other loaders (e.g. url or GH_RAW_DEFAULT)
-    grid_df = load_grid(source_url)   # replace source_url with your variable
-    st.dataframe(
-        grid_df,
-        use_container_width=True,
-        hide_index=True
+    st.dataframe(grid_df, use_container_width=True, hide_index=True, height=520)
+
+    csv_grid = grid_df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "Raster als CSV herunterladen",
+        data=csv_grid,
+        file_name="Herren_40-50-60_Raster.csv",
+        mime="text/csv",
     )
-
-    # Optional: allow download
-    csv = grid_df.to_csv(index=False).encode("utf-8")
-    st.download_button("CSV herunterladen", data=csv, file_name="Herren_40-50-60_Raster.csv", mime="text/csv")
-
-
-
-
-
-
