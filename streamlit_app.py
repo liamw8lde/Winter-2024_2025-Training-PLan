@@ -1,17 +1,21 @@
 # streamlit_app.py
-import io
-import re
-import unicodedata
-from datetime import date
-from collections import defaultdict, Counter
+# A modern viewer for your winter training plan (no editing).
+# - Reads the Excel workbook you publish (Spielplan or the grid).
+# - Clean filters: player, day, date range, singles/doubles.
+# - "My schedule" tab + ICS download.
+# - Uses Legende sheet for slot colors; has a sensible fallback palette.
+
+import io, re, unicodedata, requests
+from datetime import datetime, timedelta, date
+from collections import defaultdict
 
 import pandas as pd
 import streamlit as st
-from openpyxl import load_workbook, Workbook
-from openpyxl.styles import PatternFill, Font
-from openpyxl.utils import get_column_letter
+from dateutil import tz
 
-# ------------------------------- Utils -------------------------------
+st.set_page_config(page_title="🎾 Winter-Training – Plan", layout="wide")
+
+# ---------------------------- helpers ----------------------------
 
 SLOT_RE = re.compile(r"^([DE])(\d{2}):(\d{2})-([0-9]+)\s+PL([AB])$", re.IGNORECASE)
 
@@ -20,19 +24,28 @@ def norm(s):
     s = ''.join(c for c in unicodedata.normalize('NFKD', s) if not unicodedata.combining(c))
     return re.sub(r"\s+"," ",s)
 
-def to_date(v):
-    try: return pd.to_datetime(v).date()
-    except: return None
+def to_dt(d):
+    # normalize Excel dates/strings -> pd.Timestamp(date)
+    try:
+        t = pd.to_datetime(d)
+        # keep date only
+        return pd.Timestamp(t.date())
+    except Exception:
+        return pd.NaT
 
-def minutes_from_code(code: str) -> int:
-    m=re.search(r"-([0-9]+)\s+PL", code)
-    return int(m.group(1)) if m else 0
+def parse_slot(code):
+    """
+    D20:00-120 PLA  -> (type='D', start='20:00', minutes=120, court='PLA')
+    """
+    m = SLOT_RE.match(str(code or ""))
+    if not m: return None
+    typ = m.group(1).upper()
+    hh = int(m.group(2)); mm = int(m.group(3))
+    minutes = int(m.group(4))
+    court = m.group(5).upper()
+    return {"type": typ, "hh": hh, "mm": mm, "minutes": minutes, "court": court}
 
-def required_count(code: str) -> int:
-    return 2 if code.upper().startswith("E") else 4
-
-# Stable readable palette (overridden by Legende if present)
-FALLBACK_PALETTE = {
+FALLBACK_COLORS = {
     'D20:00-120 PLA':'1D4ED8','D20:00-120 PLB':'F59E0B',
     'D20:30-90 PLA':'6D28D9','D20:30-90 PLB':'C4B5FD',
     'E18:00-60 PLA':'10B981','E19:00-60 PLA':'14B8A6','E19:00-60 PLB':'14B8A6',
@@ -40,451 +53,230 @@ FALLBACK_PALETTE = {
     'E20:30-90 PLA':'10B981','E20:30-90 PLB':'10B981'
 }
 
-def luminance(hex6: str) -> float:
+def read_palette_from_legende(xls_bytes):
+    try:
+        df = pd.read_excel(io.BytesIO(xls_bytes), sheet_name="Legende")
+    except Exception:
+        return {}
+    ex_col=col_col=None
+    for c in df.columns:
+        lc=str(c).lower()
+        if ('slot' in lc) or ('beispiel' in lc) or ('code' in lc): ex_col=c
+        if ('farbe' in lc) or ('hex' in lc): col_col=c
+    out={}
+    if ex_col and col_col:
+        for _,row in df.iterrows():
+            code = str(row[ex_col]).strip() if pd.notna(row[ex_col]) else ''
+            colv = str(row[col_col]).strip() if pd.notna(row[col_col]) else ''
+            if code and SLOT_RE.match(code):
+                hex6 = colv.replace('#','').upper()
+                if re.fullmatch(r"[0-9A-F]{6}", hex6 or ""):
+                    out[code]=hex6
+    return out
+
+def make_badge(text, hex6):
+    # small rounded color chip used in list view
+    tc = "#fff" if _lum(hex6) < 0.55 else "#111"
+    return f"""<span style="display:inline-block;background:#{hex6};color:{tc};
+               padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600">
+               {text}</span>"""
+
+def _lum(hex6):
     r=int(hex6[0:2],16)/255; g=int(hex6[2:4],16)/255; b=int(hex6[4:6],16)/255
     return 0.2126*r + 0.7152*g + 0.0722*b
 
-def readable_font_color(hex6: str) -> str:
-    return "FFFFFF" if luminance(hex6) < 0.55 else "000000"
+def slot_to_timeslot(d: pd.Timestamp, code: str, tzname="Europe/Berlin"):
+    """Return (dt_start, dt_end) aware datetimes from date + slot code."""
+    p = parse_slot(code)
+    if not p: return None, None
+    start = datetime(d.year, d.month, d.day, p["hh"], p["mm"], tzinfo=tz.gettz(tzname))
+    end   = start + timedelta(minutes=p["minutes"])
+    return start, end
 
-# ------------------------- Jotform & Rankings ------------------------
+def to_ics(events, cal_name="Winter Training"):
+    # events: list of dicts with start, end (aware datetimes), summary, description, location
+    def dtfmt(dt): return dt.astimezone(tz.UTC).strftime("%Y%m%dT%H%M%SZ")
+    out = []
+    out.append("BEGIN:VCALENDAR")
+    out.append("VERSION:2.0")
+    out.append(f"PRODID:-//WinterTraining//streamlit//EN")
+    out.append(f"X-WR-CALNAME:{cal_name}")
+    for ev in events:
+        out.append("BEGIN:VEVENT")
+        out.append(f"DTSTART:{dtfmt(ev['start'])}")
+        out.append(f"DTEND:{dtfmt(ev['end'])}")
+        out.append(f"SUMMARY:{ev['summary']}")
+        if ev.get("description"): out.append(f"DESCRIPTION:{ev['description']}")
+        if ev.get("location"): out.append(f"LOCATION:{ev['location']}")
+        out.append("END:VEVENT")
+    out.append("END:VCALENDAR")
+    return "\r\n".join(out).encode("utf-8")
 
-def parse_days(s):
-    if not isinstance(s,str): return set()
-    out=set()
-    for p in re.split(r"[,;\n]+", s):
-        pl=norm(p).lower()
-        if pl.startswith("mon"): out.add("Montag")
-        elif pl.startswith("mit"): out.add("Mittwoch")
-        elif pl.startswith("don"): out.add("Donnerstag")
-        elif p in ("Montag","Mittwoch","Donnerstag"): out.add(p)
-    return out
+# --------------------------- data loading ---------------------------
 
-def parse_blocks(s):
-    blocks=[]
-    if not isinstance(s,str) or not s.strip(): return blocks
-    for line in str(s).splitlines():
-        ds=re.findall(r"\d{4}[-/\.]\d{2}[-/\.]\d{2}", line)
-        if len(ds)>=2:
-            d1=pd.to_datetime(ds[0]).date(); d2=pd.to_datetime(ds[1]).date()
-            if d2<d1: d1,d2=d2,d1
-            blocks.append((d1,d2))
-    return blocks
-
-def load_jotform(file) -> dict:
-    """Return availability rules: {name_norm: {'days': set, 'blocks': [(d1,d2),...]}}"""
-    df = pd.read_excel(file, sheet_name=0)
-    def find_col(includes):
-        inc=[s.lower() for s in (includes if isinstance(includes,(list,tuple)) else [includes])]
-        for c in df.columns:
-            if all(s in str(c).lower() for s in inc): return c
-        return None
-    name_col=None
-    for cand in ["wie heißt du","wie heisst du","name"]:
-        name_col=find_col(cand)
-        if name_col: break
-    days_col=find_col("wochentage")
-    holiday_col=find_col(["nicht spielen","urlaub"]) or find_col("urlaub")
-
-    rules={}
-    for _,row in df.iterrows():
-        nm=norm(row.get(name_col,"")).lower()
-        if not nm: continue
-        rules[nm]={'days':parse_days(row.get(days_col,"")), 'blocks':parse_blocks(row.get(holiday_col,""))}
-    return rules
-
-def load_rankings(file) -> dict:
-    """Expect columns like: Name / Rank (1..6) / Gender (m|w) — flexible header match."""
-    df = pd.read_excel(file, sheet_name=0)
-    def fcol(*alts):
-        for a in alts:
-            for c in df.columns:
-                if a in str(c).lower(): return c
-        return None
-    name_col = fcol("name","spieler")
-    rank_col = fcol("rank","starke","spielstarke","stärke")
-    sex_col  = fcol("gender","geschlecht","sex")
-    r={}
-    for _,row in df.iterrows():
-        nm=norm(row.get(name_col,""))
-        if not nm: continue
-        r[nm.lower()] = {
-            "rank": int(row.get(rank_col, 3)) if pd.notna(row.get(rank_col, None)) else 3,
-            "sex":  str(row.get(sex_col, "")).strip().lower()[:1]
-        }
-    return r
-
-# ---------------------------- Plan I/O -------------------------------
-
-def read_palette_from_legende(wb) -> dict:
-    try:
-        if "Legende" not in wb.sheetnames: return {}
-        # Allow both 'Legende' typed in Excel or DataFrame read
-        # We try to read via pandas to get hex codes written in cells.
-        with io.BytesIO() as tmp:
-            wb.save(tmp); tmp.seek(0)
-            df = pd.read_excel(tmp, sheet_name="Legende")
-        ex_col= None; col_col=None
-        for c in df.columns:
-            lc=str(c).lower()
-            if 'slot' in lc or 'beispiel' in lc: ex_col=c
-            if 'farbe' in lc or 'hex' in lc: col_col=c
-        out={}
-        if ex_col and col_col:
-            for _,row in df.iterrows():
-                code = str(row[ex_col]).strip() if pd.notna(row[ex_col]) else ''
-                colv = str(row[col_col]).strip() if pd.notna(row[col_col]) else ''
-                if code and SLOT_RE.match(code):
-                    hex6 = colv.replace('#','').upper()
-                    if re.fullmatch(r"[0-9A-F]{6}", hex6 or ""):
-                        out[code]=hex6
-        return out
-    except Exception:
-        return {}
-
-def read_grid(wb):
-    ws = wb["Herren 40–50–60"]
-    HDR=2; START=3
-    players=[str(ws.cell(row=HDR, column=c).value or "").strip() for c in range(3, ws.max_column+1)]
-    rows=[]
-    for r in range(START, ws.max_row+1):
-        dd = to_date(ws.cell(row=r, column=1).value)
-        tag = str(ws.cell(row=r, column=2).value or "").strip()
-        if not dd: continue
-        row={"row":r,"date":dd,"tag":tag}
-        for ci,p in enumerate(players, start=3):
-            code=str(ws.cell(row=r, column=ci).value or "").strip()
-            row[p]=code
-        rows.append(row)
-    return pd.DataFrame(rows), players
-
-def build_slot_map(df, players):
-    slot_map=defaultdict(list)  # (date, tag, slot) -> [players]
-    for _,row in df.iterrows():
-        dd=row["date"]; tag=row["tag"]
-        for p in players:
-            val=str(row.get(p,"") or "").strip()
-            if SLOT_RE.match(val):
-                slot_map[(dd,tag,val)].append(p)
-    return slot_map
-
-# ------------------------ Validation & Fixing ------------------------
-
-def is_available(name, dd, tag, jot_rules):
-    key=norm(name).lower()
-    ru=jot_rules.get(key, None)
-    if not ru: return False
-    if tag not in ru['days']: return False
-    for s,e in ru['blocks']:
-        if s<=dd<=e: return False
-    return True
-
-def player_busy_on_day(slot_map, name, dd):
-    for (d,tag,code), plist in slot_map.items():
-        if d==dd and name in plist: return True
-    return False
-
-def slot_start(code):
-    m=SLOT_RE.match(code)
-    return int(m.group(2))*60 + int(m.group(3)) if m else 9999
-
-def fix_conflicts(slot_map, players, tags_by_date, jot_rules,
-                  keep_monday_rule=True, keep_lars_60=True,
-                  lars_name="Lars Staubermann",
-                  must_monday=("Martin Lange","Björn Junker")):
-    """Fix headcounts, remove same-day overlaps, and respect Jotform rules."""
-    totals = Counter()
-    for plist in slot_map.values():
-        for p in plist: totals[p]+=1
-
-    # Remove Jotform violations
-    for (dd,tag,code), plist in list(slot_map.items()):
-        for p in list(plist):
-            if not is_available(p, dd, tag, jot_rules):
-                slot_map[(dd,tag,code)].remove(p)
-                totals[p]-=1
-
-    # Fix headcounts (overfilled first)
-    for (dd,tag,code), plist in list(slot_map.items()):
-        need=required_count(code)
-        if len(plist)>need:
-            def pri_keep(n):
-                pri0 = 0 if (keep_monday_rule and tag=="Montag" and code=="D20:00-120 PLA" and norm(n) in map(lambda x:norm(x), [*must_monday, lars_name])) else 1
-                return (pri0, totals[n], norm(n))
-            keep = sorted(plist, key=pri_keep)[:need]
-            for p in list(plist):
-                if p not in keep:
-                    slot_map[(dd,tag,code)].remove(p)
-                    totals[p]-=1
-
-    # Same-day overlaps: keep Monday PLA first, then earliest start, then doubles
-    by_day=defaultdict(list)
-    for (dd,tag,code), plist in slot_map.items():
-        for p in plist: by_day[(dd,p)].append((tag,code))
-    for (dd,p), items in by_day.items():
-        if len(items)<=1: continue
-        def pri(code, tag):
-            return (0 if (keep_monday_rule and tag=="Montag" and code=="D20:00-120 PLA") else 1,
-                    slot_start(code),
-                    0 if code.startswith("D") else 1,
-                    code)
-        tag_keep, code_keep = sorted(items, key=lambda x:pri(x[1], x[0]))[0]
-        # remove others
-        for tag,code in items:
-            if (tag,code)==(tag_keep,code_keep): continue
-            if p in slot_map[(dd,tag,code)]:
-                slot_map[(dd,tag,code)].remove(p)
-                totals[p]-=1
-
-    # Fill underfilled slots with available, least-used players
-    # (respect Jotform + no same-day double booking)
-    # On Monday PLA, try to include must_monday and (optionally) Lars.
-    lars_weeks=set()  # track weeks Lars plays Monday for 60% heuristic
-    if keep_lars_60:
-        for (dd,tag,code), plist in slot_map.items():
-            if tag=="Montag" and code=="D20:00-120 PLA" and lars_name in plist:
-                lars_weeks.add(dd.isocalendar()[1])
-
-    for (dd,tag,code), plist in list(slot_map.items()):
-        need=required_count(code)
-        if len(plist)<need:
-            short = need-len(plist)
-            cand=[]
-            for p in players:
-                if p in plist: continue
-                if player_busy_on_day(slot_map, p, dd): continue
-                if not is_available(p, dd, tag, jot_rules): continue
-                cand.append(p)
-            cand.sort(key=lambda n: (totals[n], norm(n)))
-            # Prefer Martin/Björn on Monday PLA
-            if keep_monday_rule and tag=="Montag" and code=="D20:00-120 PLA":
-                for must in must_monday:
-                    for p in cand:
-                        if norm(p).lower()==norm(must).lower() and short>0:
-                            slot_map[(dd,tag,code)].append(p)
-                            totals[p]+=1
-                            short-=1
-                            cand.remove(p)
-                            break
-                # Lars 60% Mondays (approx): if not already many weeks, include when free
-                if keep_lars_60 and short>0 and lars_name in cand:
-                    week=dd.isocalendar()[1]
-                    if week not in lars_weeks:
-                        slot_map[(dd,tag,code)].append(lars_name)
-                        totals[lars_name]+=1
-                        short-=1
-                        lars_weeks.add(week)
-                        cand.remove(lars_name)
-            for p in cand:
-                if short<=0: break
-                slot_map[(dd,tag,code)].append(p)
-                totals[p]+=1
-                short-=1
-    return slot_map
-
-# ----------------------------- Writer --------------------------------
-
-def write_workbook(base_wb, slot_map, players, dark_grey_empties=True):
-    wb = Workbook()
-    if "Sheet" in wb.sheetnames:
-        wb.remove(wb["Sheet"])
-    ws = wb.create_sheet("Herren 40–50–60")
-
-    # Collect all dates/tags sorted
-    all_rows = defaultdict(dict)  # dd -> {"tag": tag, player->slot}
-    for (dd,tag,code), plist in slot_map.items():
-        if "tag" not in all_rows[dd]: all_rows[dd]["tag"]=tag
-        for p in plist:
-            all_rows[dd][p]=code
-    dates_sorted = sorted(all_rows.keys())
-
-    # Header rows
-    ws.cell(row=1, column=1, value="Datum")
-    ws.cell(row=1, column=2, value="Tag")
-    for i,p in enumerate(players, start=3):
-        ws.cell(row=2, column=i, value=p)
-
-    # Fill rows
-    r=3
-    for dd in dates_sorted:
-        ws.cell(row=r, column=1, value=pd.Timestamp(dd))
-        ws.cell(row=r, column=2, value=all_rows[dd]["tag"])
-        for i,p in enumerate(players, start=3):
-            code = all_rows[dd].get(p,"")
-            ws.cell(row=r, column=i, value=code)
-        r+=1
-
-    # Palette
-    palette = read_palette_from_legende(base_wb)
-    for k,v in FALLBACK_PALETTE.items():
-        palette.setdefault(k,v)
-
-    # Color slots + dark grey empties if asked
-    for rr in range(3, ws.max_row+1):
-        for cc in range(3, ws.max_column+1):
-            val=str(ws.cell(row=rr, column=cc).value or "").strip()
-            if SLOT_RE.match(val):
-                hex6 = palette.get(val, None)
-                if hex6:
-                    ws.cell(row=rr, column=cc).fill = PatternFill("solid", fgColor=hex6)
-                    ws.cell(row=rr, column=cc).font = Font(bold=True, color=readable_font_color(hex6))
-            elif dark_grey_empties:
-                ws.cell(row=rr, column=cc).fill = PatternFill("solid", fgColor="1F2937")
-
-    # Derived tabs
-    # Spielplan
-    ws_sp = wb.create_sheet("Spielplan")
-    ws_sp.append(['Datum','Tag','Slot','Typ','Spieler'])
-    for (dd,tag,code), plist in sorted(slot_map.items(), key=lambda x:(x[0][0], x[0][2], x[0][1])):
-        ws_sp.append([pd.Timestamp(dd), tag, code, ("Einzel" if code.startswith("E") else "Doppel"), " / ".join(plist)])
-        # color slot cell
-        hex6 = palette.get(code)
-        if hex6:
-            c = ws_sp.cell(row=ws_sp.max_row, column=3)
-            c.fill = PatternFill("solid", fgColor=hex6)
-            c.font = Font(bold=True, color=readable_font_color(hex6))
-
-    # Wochenübersicht / Sanity
-    counts = {p:{'Einzel':0,'Doppel':0,'Gesamt':0} for p in players}
-    for (dd,tag,code), plist in slot_map.items():
-        typ = 'Einzel' if code.startswith('E') else 'Doppel'
-        for n in plist:
-            counts[n]['Gesamt']+=1
-            counts[n][typ]+=1
-    for name in ["Wochenübersicht","Sanity Check"]:
-        ws_w = wb.create_sheet(name)
-        ws_w.append(['Spieler','Einzel','Doppel','Gesamt'])
-        for p in players:
-            ws_w.append([p, counts[p]['Einzel'], counts[p]['Doppel'], counts[p]['Gesamt']])
-
-    # Konflikte (should be empty when we’re done; we still populate if any)
-    conflicts=[]
-    # headcounts
-    for (dd,tag,code), plist in slot_map.items():
-        need = required_count(code)
-        if len(plist)!=need:
-            conflicts.append([pd.Timestamp(dd), tag, code, f"{len(plist)}/{need} Spieler eingetragen"])
-    # same-day overlaps
-    by_day=defaultdict(list)
-    for (dd,tag,code), plist in slot_map.items():
-        for n in plist: by_day[(dd,n)].append(code)
-    for (dd,n), codes in by_day.items():
-        if len(codes)>1:
-            conflicts.append([pd.Timestamp(dd), "", ", ".join(sorted(codes)), f"{n}: Mehrfach-Einsatz am selben Tag"])
-    ws_k = wb.create_sheet("Konflikte")
-    if conflicts:
-        ws_k.append(['Datum','Tag','Slot','Grund'])
-        for row in sorted(conflicts, key=lambda x:(x[0], x[1], x[2], x[3])):
-            ws_k.append(row)
+@st.cache_data(show_spinner=False)
+def load_excel_from_source(source_type, file=None, url=None):
+    if source_type == "Upload":
+        xls = file.read()
+        name = file.name
     else:
-        ws_k.append(["Keine Konflikte gefunden."])
+        r = requests.get(url)
+        r.raise_for_status()
+        xls = r.content
+        name = url.split("/")[-1]
+    # Spielplan first
+    try:
+        df_sp = pd.read_excel(io.BytesIO(xls), sheet_name="Spielplan")
+        if {"Datum","Tag","Slot","Spieler"}.issubset(df_sp.columns):
+            df_sp = df_sp.rename(columns={"Datum":"Date","Tag":"Day","Slot":"Slot","Spieler":"Players","Typ":"Typ"})
+    except Exception:
+        df_sp = None
 
-    # Platzgebühren & ABO Platzkosten
-    per_day=defaultdict(lambda:{'Slots':0,'Platzstunden':0.0})
-    for (dd,tag,code), plist in slot_map.items():
-        per_day[tag]['Slots'] += 1
-        per_day[tag]['Platzstunden'] += minutes_from_code(code)/60.0
-    summary = [[k, v['Slots'], round(v['Platzstunden'],2)] for k,v in sorted(per_day.items())]
-    for name in ["Platzgebühren","ABO Platzkosten"]:
-        ws_p = wb.create_sheet(name)
-        ws_p.append(['Tag','Slots gesamt','Platzstunden gesamt'])
-        for row in summary: ws_p.append(row)
+    # If no Spielplan, attempt to build from grid "Herren 40–50–60"
+    if df_sp is None:
+        df_grid = pd.read_excel(io.BytesIO(xls), sheet_name="Herren 40–50–60", header=[1])
+        # Expect first two columns = Datum, Tag
+        df_grid = df_grid.rename(columns={df_grid.columns[0]:"Date", df_grid.columns[1]:"Day"})
+        players = [c for c in df_grid.columns[2:]]
+        rows=[]
+        for _,row in df_grid.iterrows():
+            d = to_dt(row["Date"])
+            day = str(row["Day"])
+            for p in players:
+                code = str(row.get(p,"") or "").strip()
+                if SLOT_RE.match(code):
+                    rows.append({"Date":d, "Day":day, "Slot":code, "Players":p, "Typ":"Einzel" if code.startswith("E") else "Doppel"})
+        df_sp = pd.DataFrame(rows)
+    # Normalize
+    df_sp["Date"] = df_sp["Date"].apply(to_dt)
+    df_sp["Typ"]  = df_sp.get("Typ", pd.Series(["Doppel" if str(s).startswith("D") else "Einzel" for s in df_sp["Slot"]]))
+    # Expand Players into rows
+    out=[]
+    for _,r in df_sp.iterrows():
+        plist = [p.strip() for p in str(r["Players"]).split("/") if p.strip()]
+        out.append({**r, "PlayerList": plist})
+    df_sp = pd.DataFrame(out)
+    return xls, df_sp, name
 
-    return wb
+# ------------------------------ UI ---------------------------------
 
-# ----------------------------- Streamlit -----------------------------
-
-st.set_page_config(page_title="Winter-Training – Planer", layout="wide")
-st.title("🎾 Winter-Training Planer")
+st.title("🎾 Winter-Training – Online Plan")
+st.caption("Schöner Überblick für alle Spieler:innen – mit Filtern, Suche und persönlichem Kalender-Export.")
 
 with st.sidebar:
-    st.header("📄 Dateien hochladen")
-    plan_file = st.file_uploader("Aktueller Plan / Template (.xlsx)", type=["xlsx"])
-    jot_file  = st.file_uploader("Jotform-Export (.xlsx)", type=["xlsx"])
-    rank_file = st.file_uploader("Spielstärke (optional) (.xlsx)", type=["xlsx"])
+    st.header("Datenquelle")
+    source = st.radio("Wo liegt der Plan?", ["Upload", "GitHub/URL"], horizontal=True)
+    file = url = None
+    if source == "Upload":
+        file = st.file_uploader("Excel hochladen (.xlsx)", type=["xlsx"])
+    else:
+        url = st.text_input("Excel URL (z.B. GitHub raw URL)")
+    st.divider()
+    st.header("Filter")
+    picked_players = st.multiselect("Spieler auswählen (optional)", [], placeholder="Alle")
+    day_filter = st.multiselect("Wochentage", ["Montag","Mittwoch","Donnerstag"], default=["Montag","Mittwoch","Donnerstag"])
+    typ_filter = st.multiselect("Art", ["Einzel","Doppel"], default=["Einzel","Doppel"])
+    date_from = st.date_input("Von", value=None)
+    date_to   = st.date_input("Bis", value=None)
 
-    st.header("⚙️ Regeln")
-    keep_monday = st.checkbox("Montags: D20:00-120 PLA = starke Doppel (Martin & Björn fix)", value=True)
-    keep_lars   = st.checkbox("Lars ~60% Montags-PLA und max. 1 Match pro Woche", value=True)
-    dark_empty  = st.checkbox("Leere Zellen dunkelgrau färben", value=True)
-    st.caption("Hinweis: Headcounts (E=2, D=4), keine Doppelbelegung am selben Tag, und Jotform-Verfügbarkeiten werden stets erzwungen.")
+if (source == "Upload" and file) or (source == "GitHub/URL" and url):
+    try:
+        xls_bytes, df_sp, source_name = load_excel_from_source(source, file=file, url=url)
+    except Exception as e:
+        st.error(f"Konnte Datei nicht laden: {e}")
+        st.stop()
 
-colA, colB = st.columns([1,1])
+    # palette
+    palette = {**FALLBACK_COLORS, **read_palette_from_legende(xls_bytes)}
+    # players list for sidebar (update options)
+    all_players = sorted(sorted({p for lst in df_sp["PlayerList"] for p in lst}), key=lambda s:norm(s).lower())
+    if not picked_players:
+        with st.sidebar:
+            st.session_state.setdefault("players_loaded", True)
+            st.multiselect("Spieler auswählen (optional)", all_players, key="players_dummy", disabled=True)
 
-if plan_file and jot_file:
-    # Load workbook
-    base_wb = load_workbook(plan_file)
-    df_grid, players = read_grid(base_wb)
-    slot_map = build_slot_map(df_grid, players)
-    tags_by_date = {row["date"]: row["tag"] for _,row in df_grid[["date","tag"]].drop_duplicates().iterrows()}
+    # Apply filters
+    df = df_sp.copy()
+    if picked_players:
+        df = df[df["PlayerList"].apply(lambda L: any(p in L for p in picked_players))]
+    if day_filter:
+        df = df[df["Day"].isin(day_filter)]
+    if typ_filter:
+        df = df[df["Typ"].isin(typ_filter)]
+    if date_from:
+        df = df[df["Date"] >= pd.Timestamp(date_from)]
+    if date_to:
+        df = df[df["Date"] <= pd.Timestamp(date_to)]
 
-    jot_rules = load_jotform(jot_file)
-    ranks = {}
-    if rank_file:
-        ranks = load_rankings(rank_file)  # (available for future ranking-based pairing logic)
+    # ---------- TABS ----------
+    tab1, tab2, tab3, tab4 = st.tabs(["📅 Übersicht", "👤 Mein Spielplan", "🎨 Legende", "📄 Tabelle"])
 
-    with colA:
-        st.subheader("📊 Aktueller Überblick")
-        total_matches = sum(len(v)//2 if k[2].startswith("E") else len(v)//4 for k,v in slot_map.items())
-        st.metric("Spieler im Raster", len(players))
-        st.metric("Belegte Slots", len(slot_map))
-        st.metric("Geschätzte Matches", total_matches)
+    with tab1:
+        st.subheader("Übersicht")
+        # Group by date, render nice list with colored slot badges
+        for d, grp in df.sort_values(["Date","Slot"]).groupby("Date"):
+            st.markdown(f"### {d.date().strftime('%a, %d.%m.%Y')}")
+            for _,r in grp.iterrows():
+                slot = r["Slot"]
+                hex6 = palette.get(slot, "6B7280")
+                badge = make_badge(slot, hex6)
+                players = " · ".join(r["PlayerList"])
+                st.markdown(f"{badge} &nbsp; **{r['Typ']}** — {players}", unsafe_allow_html=True)
+            st.markdown("---")
 
-    with colB:
-        st.subheader("🧪 Schnellprüfung (vor Fix)")
-        conflicts=[]
-        # headcounts
-        for (dd,tag,code), plist in slot_map.items():
-            need=required_count(code)
-            if len(plist)!=need:
-                conflicts.append([dd, tag, code, f"{len(plist)}/{need} Spieler eingetragen"])
-        # same-day overlaps
-        by_day=defaultdict(list)
-        for (dd,tag,code), plist in slot_map.items():
-            for n in plist: by_day[(dd,n)].append(code)
-        for (dd,n), codes in by_day.items():
-            if len(codes)>1:
-                conflicts.append([dd, tags_by_date.get(dd,""), ", ".join(sorted(codes)), f"{n}: Mehrfach-Einsatz am selben Tag"])
-        # jotform
-        for (dd,tag,code), plist in slot_map.items():
-            for n in plist:
-                nm=norm(n).lower()
-                ru=jot_rules.get(nm)
-                bad = (ru is None) or (tag not in ru['days']) or any(s<=dd<=e for s,e in ru['blocks'])
-                if bad:
-                    conflicts.append([dd, tag, code, f"{n}: Jotform-Verfügbarkeit verletzt"])
-        if conflicts:
-            dfc = pd.DataFrame(conflicts, columns=["Datum","Tag","Slot","Grund"]).sort_values(["Datum","Tag","Slot","Grund"])
-            st.dataframe(dfc, use_container_width=True)
-        else:
-            st.success("Keine Konflikte gefunden.")
+    with tab2:
+        st.subheader("Mein Spielplan")
+        me = st.selectbox("Spieler auswählen", all_players)
+        me_df = df_sp[df_sp["PlayerList"].apply(lambda L: me in L)].sort_values(["Date","Slot"])
+        st.write(f"Gefundene Termine: **{len(me_df)}**")
+        # upcoming
+        today = pd.Timestamp(date.today())
+        upcoming = me_df[me_df["Date"] >= today].head(6)
+        if len(upcoming):
+            st.markdown("**Nächste Spiele**")
+            for _,r in upcoming.iterrows():
+                slot = r["Slot"]; typ = r["Typ"]; day = r["Day"]; d = r["Date"].date().strftime("%a, %d.%m.%Y")
+                start, end = slot_to_timeslot(r["Date"], slot)
+                hhmm = start.strftime("%H:%M") if start else "?"
+                st.write(f"- {d} · {day} · {hhmm} · {typ} · {slot}")
+        # ICS export
+        if st.button("📥 Als Kalender (.ics) exportieren"):
+            events=[]
+            for _,r in me_df.iterrows():
+                start, end = slot_to_timeslot(r["Date"], r["Slot"])
+                if start and end:
+                    others = [p for p in r["PlayerList"] if p != me]
+                    events.append({
+                        "start": start, "end": end,
+                        "summary": f"{r['Typ']} – {r['Slot']}",
+                        "description": f"Gegner/Mitspieler: {', '.join(others)}",
+                        "location": "Halle"
+                    })
+            ics = to_ics(events, cal_name=f"Winter Training – {me}")
+            st.download_button("💾 iCal herunterladen", data=ics,
+                               file_name=f"winter_training_{norm(me).replace(' ','_')}.ics",
+                               mime="text/calendar")
 
-    st.markdown("---")
-    c1, c2 = st.columns([1,1])
+        st.markdown("—")
+        st.dataframe(me_df[["Date","Day","Slot","Typ","Players"]].rename(columns={"Date":"Datum","Day":"Tag","Players":"Spieler"}),
+                     use_container_width=True, height=380)
 
-    if st.button("🧹 Plan automatisch reparieren", type="primary"):
-        fixed = fix_conflicts(slot_map, players, tags_by_date, jot_rules, keep_monday_rule=keep_monday, keep_lars_60=keep_lars)
-        # Write out workbook with colors + supporting tabs
-        out_wb = write_workbook(base_wb, fixed, players, dark_grey_empties=dark_empty)
-        bio = io.BytesIO()
-        out_wb.save(bio); bio.seek(0)
-        st.success("Plan repariert & neu aufgebaut.")
-        st.download_button("💾 Download Excel (repariert)", data=bio.getvalue(),
-                           file_name="Trainingplan_CONFLICTS_FIXED.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    with tab3:
+        st.subheader("Farblegende")
+        leg_rows = []
+        for code, hex6 in sorted(palette.items()):
+            leg_rows.append({"Slot": code, "Farbe": f"#{hex6}"})
+        leg = pd.DataFrame(leg_rows)
+        st.dataframe(leg, use_container_width=True, height=380)
+        # visual chips
+        st.markdown("#### Vorschau")
+        chip_html = " ".join(make_badge(k, v) for k,v in sorted(palette.items()))
+        st.markdown(chip_html, unsafe_allow_html=True)
 
-        # Show Spielplan preview
-        rows=[]
-        for (dd,tag,code), plist in sorted(fixed.items(), key=lambda x:(x[0][0], x[0][2], x[0][1])):
-            rows.append({"Datum":dd, "Tag":tag, "Slot":code, "Typ":("Einzel" if code.startswith("E") else "Doppel"), "Spieler":" / ".join(plist)})
-        st.subheader("📅 Spielplan (Vorschau)")
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, height=420)
-
-    st.markdown("### 📋 Aktueller Spielplan (unverändert)")
-    rows=[]
-    for (dd,tag,code), plist in sorted(slot_map.items(), key=lambda x:(x[0][0], x[0][2], x[0][1])):
-        rows.append({"Datum":dd, "Tag":tag, "Slot":code, "Typ":("Einzel" if code.startswith("E") else "Doppel"), "Spieler":" / ".join(plist)})
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, height=360)
+    with tab4:
+        st.subheader(f"Gesamttabelle – Quelle: {source_name}")
+        df_show = df_sp[["Date","Day","Slot","Typ","Players"]].rename(columns={"Date":"Datum","Day":"Tag","Players":"Spieler"})
+        st.dataframe(df_show.sort_values(["Datum","Slot"]), use_container_width=True, height=600)
 
 else:
-    st.info("Lade bitte **Plan (.xlsx)** und **Jotform (.xlsx)** hoch, um zu starten. (Spielstärke ist optional)")
+    st.info("🔼 Bitte lade die Excel hoch **oder** gib die GitHub-Raw-URL an, dann erscheinen die Ansichten hier.")
