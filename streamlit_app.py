@@ -151,33 +151,46 @@ tab1, tab2, tab3, tab4 = st.tabs(["📆 Wochenplan", "👤 Spieler", "📄 Kompl
 # --- 📆 Wochenplan ---
 with tab1:
     st.subheader("Wochenplan")
-    # Choose ISO week; default to first upcoming week if present
-    unique_dates = sorted(df["Date"].unique())
+
+    # Build week keys as (year, week) to avoid collisions around New Year
+    def week_key(d):
+        iso = pd.Timestamp(d).isocalendar()
+        return (int(iso.year), int(iso.week))
+
     today = date.today()
-    weeks = sorted({(pd.Timestamp(d).isocalendar().week, d) for d in unique_dates})
-    week_numbers = sorted({w for w,_ in weeks})
+    all_dates = sorted(df["Date"].unique())
+    if not all_dates:
+        st.info("Keine Termine im Plan.")
+        st.stop()
 
-    # pick index: upcoming if possible
-    idx = 0
-    for i, (w, d) in enumerate(sorted(weeks)):
-        if d >= today:
-            idx = i
-            break
-    # Build selectbox options as "KW xx"
-    week_label_map = {}
-    for w in week_numbers:
-        week_label_map[w] = f"KW {w:02d}"
-    picked_week = st.selectbox("Woche", options=week_numbers, index=min(idx, len(week_numbers)-1),
-                               format_func=lambda w: week_label_map.get(w, f"KW {w:02d}"))
-    week_dates = [d for w, d in weeks if w == picked_week]
+    # Map week -> list of dates in that week (from data)
+    wk_to_dates = {}
+    for d in all_dates:
+        wk_to_dates.setdefault(week_key(d), []).append(d)
 
-    show = df[df["Date"].isin(week_dates)]
-    for d, grp in show.groupby("Date"):
+    # Pick default: current week if present; else first week with a date >= today; else last
+    current_wk = week_key(today)
+    if current_wk in wk_to_dates:
+        default_key = current_wk
+    else:
+        future = [wk for wk, ds in sorted(wk_to_dates.items()) if min(ds) >= today]
+        default_key = future[0] if future else sorted(wk_to_dates.keys())[-1]
+
+    # Nice labels (KW xx, yyyy)
+    options = sorted(wk_to_dates.keys())
+    def fmt(wk):  # wk = (year, week)
+        return f"KW {wk[1]:02d} – {wk[0]}"
+
+    picked_key = st.selectbox("Woche", options=options, index=options.index(default_key), format_func=fmt)
+    show = df[df["Date"].isin(wk_to_dates[picked_key])]
+
+    for d, grp in show.sort_values(["Date","Start"]).groupby("Date"):
         st.markdown(f"### {pd.Timestamp(d).strftime('%a, %d.%m.%Y')}")
         for _,r in grp.iterrows():
             players = " · ".join(r["PlayerList"])
             st.write(f"- {r['Start']}  |  **{r['Typ']}**  |  {r['Slot']}  |  {players}")
         st.markdown("---")
+
 
 # --- 👤 Spieler ---
 with tab2:
@@ -246,3 +259,4 @@ with tab4:
                      use_container_width=True, height=420)
     else:
         st.info("Keine Einträge gefunden.")
+
