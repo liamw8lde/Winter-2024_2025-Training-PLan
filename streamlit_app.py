@@ -4,8 +4,6 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="🎾 Wintertraining – Online-Spielplan", page_icon="🎾", layout="wide")
-
 st.title("🎾 Wintertraining – Online-Spielplan")
 st.caption("Wochenansicht, Einzelspieler, kompletter Plan & Kostenübersicht.")
 
@@ -194,4 +192,5 @@ with tab4:
                      use_container_width=True, height=420)
     else:
         st.info("Keine Einträge gefunden.")
+
 
