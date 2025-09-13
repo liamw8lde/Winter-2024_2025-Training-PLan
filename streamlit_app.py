@@ -43,7 +43,7 @@ SLOT_RE = re.compile(r"^([DE])(\d{2}):(\d{2})-([0-9]+)\s+PL([AB])$", re.IGNORECA
 
 # ---------- Datenquelle ----------
 # Hard-coded GitHub RAW URL (kein UI-Eingabefeld)
-SOURCE_URL = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/trainplan.xlsx"
+SOURCE_URL = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/trainplan_FIXED.xlsx"
 
 # ---------- Loader ----------
 @st.cache_data(show_spinner=True)
@@ -409,3 +409,4 @@ with tab5:
         unsafe_allow_html=True
     )
     show_raster_aggrid(grid_df)
+
