@@ -208,14 +208,20 @@ def df_week_key(d: date):
 
 # Farbpalette analog "Legende"
 PALETTE = {
-    "D20:00-120 PLA": "1D4ED8", "D20:00-120 PLB": "F59E0B",
-    "D20:00-90 PLA":  "6D28D9", "D20:00-90 PLB":  "C4B5FD",
-    "D20:30-90 PLA":  "6D28D9", "D20:30-90 PLB":  "C4B5FD",
-    "D19:00-120 PLB": "C4B5FD", "D18:00-120 PLA": "6D28D9",
-    "E18:00-60 PLA":  "10B981",
-    "E19:00-60 PLA":  "14B8A6", "E19:00-60 PLB":  "14B8A6",
-    "E20:00-90 PLA":  "0EA5E9", "E20:00-90 PLB":  "0EA5E9",
-    "E20:30-90 PLA":  "10B981", "E20:30-90 PLB":  "10B981",
+    # Montag (Doppel, 120 min)
+    "D20:00-120 PLA": "1D4ED8",
+    "D20:00-120 PLB": "F59E0B",
+
+    # Mittwoch
+    "E18:00-60 PLA":  "10B981",  # Einzel
+    "E19:00-60 PLA":  "14B8A6",  # Einzel
+    "E19:00-60 PLB":  "14B8A6",  # Einzel
+    "D20:00-90 PLA":  "6D28D9",  # Doppel
+    "D20:00-90 PLB":  "C4B5FD",  # Doppel
+
+    # Donnerstag (Einzel, 90 min)
+    "E20:00-90 PLA":  "0EA5E9",
+    "E20:00-90 PLB":  "0EA5E9",
 }
 
 CELLSTYLE = JsCode(f"""
@@ -430,3 +436,4 @@ with tab5:
         unsafe_allow_html=True
     )
     show_raster_aggrid(grid_df)
+
