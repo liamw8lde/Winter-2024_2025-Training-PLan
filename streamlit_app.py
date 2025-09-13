@@ -3,57 +3,70 @@
 # Winter-Training – Viewer (Deutsch)
 # Tabs: Wochenplan (KW-Ansicht), Einzelspieler, Komplettplan,
 #       Kosten (17,50 €/h korrekt umgelegt), Raster (Herren 40–50–60)
+# Requirements from user:
+#  - Sidebar removed/hidden
+#  - XLSX-Quelle fest im Code (keine Uploads/Eingaben)
+#  - Passwortschutz: "TGR2025"
+#  - Kosten: KEINE "Details je Einsatz"-Tabelle/CSV
 # ------------------------------------------------------------
 import io
 import re
+import json
 import requests
 import pandas as pd
 import streamlit as st
 from datetime import date
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
-import json
 
 # ---------- Seite / Layout ----------
 st.set_page_config(
     page_title="Winter-Training Herren 40–50–60",
     page_icon="🎾",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
+
+# Sidebar & Toggle vollständig ausblenden
+st.markdown("""
+<style>
+  [data-testid="stSidebar"] { display: none !important; }
+  [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ---------- Security ----------
+PASSWORD = "TGR2025"
+
+if "auth_ok" not in st.session_state:
+    st.session_state.auth_ok = False
+
+if not st.session_state.auth_ok:
+    st.title("Winter-Training Herren 40–50–60")
+    pw = st.text_input("🔒 Passwort eingeben, um die Daten zu sehen", type="password")
+    if st.button("Anmelden"):
+        if pw == PASSWORD:
+            st.session_state.auth_ok = True
+            st.rerun()
+        else:
+            st.error("Falsches Passwort.")
+    st.stop()
 
 # ---------- Konstanten ----------
 HOURLY_RATE = 17.50  # € pro Stunde (Platzmiete)
 SLOT_RE = re.compile(r"^([DE])(\d{2}):(\d{2})-([0-9]+)\s+PL([AB])$", re.IGNORECASE)
 
 # ---------- Datenquelle ----------
-# Update: default points to the FIXED plan. Replace with your repo if needed.
-GH_RAW_DEFAULT = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/trainplan_FIXED.xlsx"
+# Fest verdrahtete RAW-URL (keine UI-Steuerung)
+SOURCE_URL = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/trainplan_FIXED.xlsx"
 
-st.sidebar.markdown("### Datenquelle")
-gh_raw_url = st.sidebar.text_input(
-    "GitHub RAW URL (optional)",
-    value="",
-    placeholder=GH_RAW_DEFAULT,
-)
-uploaded = st.sidebar.file_uploader("…oder Excel-Datei hochladen (trainplan_FIXED.xlsx)", type=["xlsx"])
-
-def _resolve_source() -> bytes:
-    """Return raw bytes from uploader (preferred) or URL."""
-    if uploaded is not None:
-        return uploaded.read()
-    url = gh_raw_url.strip() or GH_RAW_DEFAULT
-    if not url.startswith("http"):
-        raise ValueError("Bitte eine gültige GitHub RAW URL angeben oder eine Datei hochladen.")
+# ---------- Loader ----------
+@st.cache_data(show_spinner=True)
+def fetch_bytes(url: str) -> bytes:
     resp = requests.get(url, timeout=30)
     resp.raise_for_status()
     return resp.content
 
-# ---------- Loader ----------
-@st.cache_data(show_spinner=True)
-def fetch_bytes() -> bytes:
-    return _resolve_source()
-
 def _rename_like(df: pd.DataFrame, new_map: dict) -> pd.DataFrame:
-    """Flexible rename supporting case-insensitive lookup."""
     lower_map = {c.lower(): c for c in df.columns}
     ren = {}
     for want, candidates in new_map.items():
@@ -65,20 +78,11 @@ def _rename_like(df: pd.DataFrame, new_map: dict) -> pd.DataFrame:
     return df.rename(columns=ren)
 
 def _parse_player_list(value: str) -> list[str]:
-    """
-    Robust parser for 'Spieler' from our Spielplan:
-    - Singles: 'A, B'
-    - Doubles: 'A, B, C, D'
-    Also tolerates 'A & B vs C & D' or mixed separators.
-    """
     s = str(value or "").strip()
     if not s:
         return []
-    # Normalize common separators to commas
     s = s.replace(" & ", ", ").replace("&", ",").replace(" vs ", ",").replace("/", ",")
-    # Split by comma
     parts = [p.strip() for p in s.split(",") if p.strip()]
-    # Deduplicate accidental repeats while preserving order
     seen, out = set(), []
     for p in parts:
         if p not in seen:
@@ -86,16 +90,15 @@ def _parse_player_list(value: str) -> list[str]:
     return out
 
 @st.cache_data(show_spinner=False)
-def load_plan() -> pd.DataFrame:
+def load_plan(url: str) -> pd.DataFrame:
     """
-    Läd bevorzugt das Blatt 'Spielplan'.
-    Fallback: extrahiert aus dem Raster 'Herren 40–50–60' alle belegten Slots.
-    Gibt immer Spalten zurück: Date, Day, Slot, Typ, Players, PlayerList
+    Lädt bevorzugt 'Spielplan'. Fallback: extrahiert aus 'Herren 40–50–60'.
+    Gibt Spalten: Date, Day, Slot, Typ, Players, PlayerList
     """
-    data = fetch_bytes()
+    data = fetch_bytes(url)
     xio = io.BytesIO(data)
 
-    # 1) Versuch: "Spielplan" mit unseren Spalten
+    # 1) Spielplan laden
     try:
         df = pd.read_excel(xio, sheet_name="Spielplan")
         df = _rename_like(
@@ -108,14 +111,10 @@ def load_plan() -> pd.DataFrame:
                 "Typ": ["Typ", "Art"],
             },
         )
-        # Normiere Datumsfeld
         df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.date
-        # Typ aus Slot herleiten, falls fehlt
         if "Typ" not in df.columns:
             df["Typ"] = df["Slot"].apply(lambda s: "Einzel" if str(s).startswith("E") else "Doppel")
-        # Spieler-Liste robust parsen (Kommas etc.)
         df["PlayerList"] = df["Players"].apply(_parse_player_list)
-        # Einheitlich sortieren
         def slot_key(s):
             m = SLOT_RE.match(str(s))
             return (int(m.group(2)), int(m.group(3))) if m else (99, 99)
@@ -124,18 +123,16 @@ def load_plan() -> pd.DataFrame:
     except Exception:
         pass
 
-    # 2) Fallback aus dem Raster
+    # 2) Fallback: Raster
     xio.seek(0)
     grid = pd.read_excel(xio, sheet_name="Herren 40–50–60", header=[1], dtype=str)
     grid = grid.rename(columns={grid.columns[0]: "Date", grid.columns[1]: "Day"})
     grid["Date"] = pd.to_datetime(grid["Date"], errors="coerce").dt.date
     player_cols = list(grid.columns[2:])
 
-    # Sammle pro Datum/Slot alle Spieler zusammen
     rows = []
     for _, r in grid.iterrows():
         dd = r["Date"]; day = r["Day"]
-        # code -> list of players in that slot (this row)
         bucket = {}
         for p in player_cols:
             code = str(r.get(p, "") or "").strip()
@@ -153,19 +150,14 @@ def load_plan() -> pd.DataFrame:
                 }
             )
     df = pd.DataFrame(rows)
-
     def slot_key(s):
         m = SLOT_RE.match(str(s))
         return (int(m.group(2)), int(m.group(3))) if m else (99, 99)
     return df.sort_values(["Date", "Slot"], key=lambda col: col.map(slot_key) if col.name == "Slot" else col)
 
 @st.cache_data(show_spinner=False)
-def load_grid() -> pd.DataFrame:
-    """
-    Liest das Blatt 'Herren 40–50–60' (Kopfzeile = zweite Zeile im Excel).
-    Gibt Datum/Tag + Spieler-Spalten zurück.
-    """
-    data = fetch_bytes()
+def load_grid(url: str) -> pd.DataFrame:
+    data = fetch_bytes(url)
     xio = io.BytesIO(data)
     grid = pd.read_excel(xio, sheet_name="Herren 40–50–60", header=[1], dtype=str)
     grid = grid.rename(columns={grid.columns[0]: "Datum", grid.columns[1]: "Tag"})
@@ -184,7 +176,6 @@ def parse_slot(code: str):
     return {"kind": kind, "start": f"{hh:02d}:{mm:02d}", "minutes": dur}
 
 def expand_per_player(df_plan: pd.DataFrame) -> pd.DataFrame:
-    """Explodiert jede Spielplan-Zeile auf einzelne Spieler (mit Partner/Gegner)."""
     rows = []
     for _, r in df_plan.iterrows():
         plist = r["PlayerList"]
@@ -206,16 +197,17 @@ def df_week_key(d: date):
     iso = pd.Timestamp(d).isocalendar()
     return int(iso.week), int(iso.year)
 
-# Farbpalette analog "Legende"
+# Farbpalette (gültige Slots, getrennt nach PLA/PLB wo nötig)
 PALETTE = {
-    "D20:00-120 PLA": "1D4ED8", "D20:00-120 PLB": "F59E0B",
-    "D20:00-90 PLA":  "6D28D9", "D20:00-90 PLB":  "C4B5FD",
-    "D20:30-90 PLA":  "6D28D9", "D20:30-90 PLB":  "C4B5FD",
-    "D19:00-120 PLB": "C4B5FD", "D18:00-120 PLA": "6D28D9",
+    "D20:00-120 PLA": "1D4ED8",
+    "D20:00-120 PLB": "F59E0B",
+    "D20:00-90 PLA":  "6D28D9",
+    "D20:00-90 PLB":  "C4B5FD",
     "E18:00-60 PLA":  "10B981",
-    "E19:00-60 PLA":  "14B8A6", "E19:00-60 PLB":  "14B8A6",
-    "E20:00-90 PLA":  "0EA5E9", "E20:00-90 PLB":  "0EA5E9",
-    "E20:30-90 PLA":  "10B981", "E20:30-90 PLB":  "10B981",
+    "E19:00-60 PLA":  "14B8A6",
+    "E19:00-60 PLB":  "14B8A6",
+    "E20:00-90 PLA":  "0EA5E9",
+    "E20:00-90 PLB":  "0EA5E9",
 }
 
 CELLSTYLE = JsCode(f"""
@@ -228,7 +220,7 @@ function(params) {{
   const hex = pal[v] || "6B7280";  // default gray
   const bg  = "#" + hex;
 
-  // luminance approx for text color
+  // quick luminance approx for text color
   const r = parseInt(hex.substr(0,2),16)/255.0;
   const g = parseInt(hex.substr(2,2),16)/255.0;
   const b = parseInt(hex.substr(4,2),16)/255.0;
@@ -269,8 +261,8 @@ def show_raster_aggrid(grid_df: pd.DataFrame):
 
 # ---------- Daten laden ----------
 try:
-    df = load_plan()
-    grid_df = load_grid()
+    df = load_plan(SOURCE_URL)
+    grid_df = load_grid(SOURCE_URL)
 except Exception as e:
     st.error(f"Plan konnte nicht geladen werden.\n\nFehler: {e}")
     st.stop()
@@ -333,7 +325,6 @@ with tab1:
             st.markdown(f"**{day_name}, {the_date:%Y-%m-%d}**")
             day_rows = week_df[week_df["Date"] == the_date]
             for _, r in day_rows.iterrows():
-                # render players nicely
                 plist = r["PlayerList"]
                 players_text = " / ".join(plist) if plist else str(r["Players"])
                 art = "Einzel" if r["Typ"] == "Einzel" else "Doppel"
@@ -369,6 +360,7 @@ with tab3:
 # --- 💶 Kosten (17,50 €/h korrekt) ---
 with tab4:
     st.subheader("Spieler-Kosten (17,50 € pro Platz-Stunde)")
+
     rows = []
     for _, r in df.iterrows():
         slot = SLOT_RE.match(str(r["Slot"]))
@@ -392,6 +384,7 @@ with tab4:
                 }
             )
     cost_df = pd.DataFrame(rows)
+
     if cost_df.empty:
         st.info("Keine Einträge vorhanden.")
     else:
@@ -407,16 +400,14 @@ with tab4:
         st.markdown("**Gesamt je Spieler**")
         st.dataframe(agg, use_container_width=True, hide_index=True, height=360)
 
-        st.markdown("—")
-        st.markdown("**Details je Einsatz**")
-        cost_detail = cost_df.sort_values(["Spieler", "Datum", "Slot"]).rename(columns={"Datum": "Datum", "Tag": "Tag"})
-        st.dataframe(cost_detail, use_container_width=True, hide_index=True, height=420)
-
+        # Nur CSV der Aggregation (KEINE Detail-Tabelle/CSV)
         csv1 = agg.to_csv(index=False).encode("utf-8")
-        st.download_button("Kosten je Spieler – CSV", data=csv1, file_name="Kosten_pro_Spieler.csv", mime="text/csv")
-
-        csv2 = cost_detail.to_csv(index=False).encode("utf-8")
-        st.download_button("Kosten je Einsatz – CSV", data=csv2, file_name="Kosten_pro_Einsatz.csv", mime="text/csv")
+        st.download_button(
+            "Kosten je Spieler – CSV",
+            data=csv1,
+            file_name="Kosten_pro_Spieler.csv",
+            mime="text/csv",
+        )
 
 # --- 🧱 Raster (Herren 40–50–60) ---
 with tab5:
@@ -425,8 +416,11 @@ with tab5:
         "Legende:&nbsp; "
         "<span style='background:#1D4ED8;color:#fff;padding:2px 6px;border-radius:6px;'>D20:00-120 PLA</span> "
         "<span style='background:#F59E0B;color:#000;padding:2px 6px;border-radius:6px;'>D20:00-120 PLB</span> "
-        "<span style='background:#0EA5E9;color:#000;padding:2px 6px;border-radius:6px;'>E20:00-90 PLA/PLB</span> "
-        "<span style='background:#10B981;color:#000;padding:2px 6px;border-radius:6px;'>E18:00-60</span> ",
+        "<span style='background:#6D28D9;color:#fff;padding:2px 6px;border-radius:6px;'>D20:00-90 PLA</span> "
+        "<span style='background:#C4B5FD;color:#000;padding:2px 6px;border-radius:6px;'>D20:00-90 PLB</span> "
+        "<span style='background:#10B981;color:#000;padding:2px 6px;border-radius:6px;'>E18:00-60 PLA</span> "
+        "<span style='background:#14B8A6;color:#000;padding:2px 6px;border-radius:6px;'>E19:00-60 PLA/PLB</span> "
+        "<span style='background:#0EA5E9;color:#000;padding:2px 6px;border-radius:6px;'>E20:00-90 PLA/PLB</span> ",
         unsafe_allow_html=True
     )
     show_raster_aggrid(grid_df)
