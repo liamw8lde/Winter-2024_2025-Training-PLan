@@ -13,7 +13,6 @@ from datetime import date
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 import json
 
-
 # ---------- Seite / Layout ----------
 st.set_page_config(
     page_title="Winter-Training Herren 40–50–60",
@@ -26,109 +25,153 @@ HOURLY_RATE = 17.50  # € pro Stunde (Platzmiete)
 SLOT_RE = re.compile(r"^([DE])(\d{2}):(\d{2})-([0-9]+)\s+PL([AB])$", re.IGNORECASE)
 
 # ---------- Datenquelle ----------
-GH_RAW_DEFAULT = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/trainplan.xlsx"  # <-- anpassen
+# Update: default points to the FIXED plan. Replace with your repo if needed.
+GH_RAW_DEFAULT = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/trainplan_FIXED.xlsx"
+
+st.sidebar.markdown("### Datenquelle")
 gh_raw_url = st.sidebar.text_input(
     "GitHub RAW URL (optional)",
     value="",
     placeholder=GH_RAW_DEFAULT,
 )
-SOURCE_URL = gh_raw_url.strip() or GH_RAW_DEFAULT
+uploaded = st.sidebar.file_uploader("…oder Excel-Datei hochladen (trainplan_FIXED.xlsx)", type=["xlsx"])
 
-
-# ---------- Loader ----------
-@st.cache_data(show_spinner=True)
-def fetch_bytes(url: str) -> bytes:
+def _resolve_source() -> bytes:
+    """Return raw bytes from uploader (preferred) or URL."""
+    if uploaded is not None:
+        return uploaded.read()
+    url = gh_raw_url.strip() or GH_RAW_DEFAULT
     if not url.startswith("http"):
-        # Falls lokal geladen werden soll, kann man hier eine Datei öffnen.
-        # Für Streamlit Cloud wird typischerweise die RAW-URL genutzt.
-        raise ValueError("Bitte eine GitHub RAW URL angeben.")
+        raise ValueError("Bitte eine gültige GitHub RAW URL angeben oder eine Datei hochladen.")
     resp = requests.get(url, timeout=30)
     resp.raise_for_status()
     return resp.content
 
+# ---------- Loader ----------
+@st.cache_data(show_spinner=True)
+def fetch_bytes() -> bytes:
+    return _resolve_source()
+
+def _rename_like(df: pd.DataFrame, new_map: dict) -> pd.DataFrame:
+    """Flexible rename supporting case-insensitive lookup."""
+    lower_map = {c.lower(): c for c in df.columns}
+    ren = {}
+    for want, candidates in new_map.items():
+        for cand in candidates:
+            col = lower_map.get(cand.lower())
+            if col:
+                ren[col] = want
+                break
+    return df.rename(columns=ren)
+
+def _parse_player_list(value: str) -> list[str]:
+    """
+    Robust parser for 'Spieler' from our Spielplan:
+    - Singles: 'A, B'
+    - Doubles: 'A, B, C, D'
+    Also tolerates 'A & B vs C & D' or mixed separators.
+    """
+    s = str(value or "").strip()
+    if not s:
+        return []
+    # Normalize common separators to commas
+    s = s.replace(" & ", ", ").replace("&", ",").replace(" vs ", ",").replace("/", ",")
+    # Split by comma
+    parts = [p.strip() for p in s.split(",") if p.strip()]
+    # Deduplicate accidental repeats while preserving order
+    seen, out = set(), []
+    for p in parts:
+        if p not in seen:
+            seen.add(p); out.append(p)
+    return out
 
 @st.cache_data(show_spinner=False)
-def load_plan(url: str) -> pd.DataFrame:
+def load_plan() -> pd.DataFrame:
     """
     Läd bevorzugt das Blatt 'Spielplan'.
     Fallback: extrahiert aus dem Raster 'Herren 40–50–60' alle belegten Slots.
     Gibt immer Spalten zurück: Date, Day, Slot, Typ, Players, PlayerList
     """
-    data = fetch_bytes(url)
+    data = fetch_bytes()
     xio = io.BytesIO(data)
 
-    # 1) Versuch: "Spielplan"
+    # 1) Versuch: "Spielplan" mit unseren Spalten
     try:
         df = pd.read_excel(xio, sheet_name="Spielplan")
-        cols = {c.lower(): c for c in df.columns}
-        df = df.rename(
-            columns={
-                cols.get("datum", "Datum"): "Date",
-                cols.get("tag", "Tag"): "Day",
-                cols.get("slot", "Slot"): "Slot",
-                cols.get("spieler", "Spieler"): "Players",
-                cols.get("typ", "Typ" if "Typ" in df.columns else cols.get("art", "Typ")): "Typ",
-            }
+        df = _rename_like(
+            df,
+            {
+                "Date": ["Datum", "Date"],
+                "Day": ["Tag", "Day"],
+                "Slot": ["Slot"],
+                "Players": ["Spieler", "Players"],
+                "Typ": ["Typ", "Art"],
+            },
         )
+        # Normiere Datumsfeld
         df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.date
-        if "Typ" not in df:
+        # Typ aus Slot herleiten, falls fehlt
+        if "Typ" not in df.columns:
             df["Typ"] = df["Slot"].apply(lambda s: "Einzel" if str(s).startswith("E") else "Doppel")
+        # Spieler-Liste robust parsen (Kommas etc.)
+        df["PlayerList"] = df["Players"].apply(_parse_player_list)
+        # Einheitlich sortieren
+        def slot_key(s):
+            m = SLOT_RE.match(str(s))
+            return (int(m.group(2)), int(m.group(3))) if m else (99, 99)
+        df = df.sort_values(["Date", "Slot"], key=lambda col: col.map(slot_key) if col.name == "Slot" else col)
+        return df[["Date", "Day", "Slot", "Typ", "Players", "PlayerList"]]
     except Exception:
-        # 2) Fallback aus dem Raster
-        xio.seek(0)
-        grid = pd.read_excel(xio, sheet_name="Herren 40–50–60", header=[1], dtype=str)
-        grid = grid.rename(columns={grid.columns[0]: "Date", grid.columns[1]: "Day"})
-        grid["Date"] = pd.to_datetime(grid["Date"], errors="coerce").dt.date
-        players = list(grid.columns[2:])
-        rows = []
-        for _, r in grid.iterrows():
-            dd = r["Date"]
-            day = r["Day"]
-            for p in players:
-                code = str(r.get(p, "") or "").strip()
-                if SLOT_RE.match(code):
-                    rows.append(
-                        {
-                            "Date": dd,
-                            "Day": day,
-                            "Slot": code,
-                            "Typ": "Einzel" if code.startswith("E") else "Doppel",
-                            "Players": p,
-                        }
-                    )
-        df = pd.DataFrame(rows)
+        pass
 
-    # Normalisiere PlayerList (Liste der Namen je Zeile)
-    def to_list(s):
-        return [x.strip() for x in str(s).split("/") if str(x).strip()]
+    # 2) Fallback aus dem Raster
+    xio.seek(0)
+    grid = pd.read_excel(xio, sheet_name="Herren 40–50–60", header=[1], dtype=str)
+    grid = grid.rename(columns={grid.columns[0]: "Date", grid.columns[1]: "Day"})
+    grid["Date"] = pd.to_datetime(grid["Date"], errors="coerce").dt.date
+    player_cols = list(grid.columns[2:])
 
-    df["PlayerList"] = df["Players"].apply(to_list)
-    # Einheitliches Sortieren (Datum, Startzeit)
+    # Sammle pro Datum/Slot alle Spieler zusammen
+    rows = []
+    for _, r in grid.iterrows():
+        dd = r["Date"]; day = r["Day"]
+        # code -> list of players in that slot (this row)
+        bucket = {}
+        for p in player_cols:
+            code = str(r.get(p, "") or "").strip()
+            if SLOT_RE.match(code):
+                bucket.setdefault(code, []).append(p)
+        for code, plist in bucket.items():
+            rows.append(
+                {
+                    "Date": dd,
+                    "Day": day,
+                    "Slot": code,
+                    "Typ": "Einzel" if code.startswith("E") else "Doppel",
+                    "Players": ", ".join(plist),
+                    "PlayerList": plist,
+                }
+            )
+    df = pd.DataFrame(rows)
+
     def slot_key(s):
         m = SLOT_RE.match(str(s))
-        if not m:
-            return (99, 99)
-        return (int(m.group(2)), int(m.group(3)))  # hh, mm
-    df = df.sort_values(["Date", "Slot"], key=lambda col: col.map(slot_key) if col.name == "Slot" else col)
-    return df
-
+        return (int(m.group(2)), int(m.group(3))) if m else (99, 99)
+    return df.sort_values(["Date", "Slot"], key=lambda col: col.map(slot_key) if col.name == "Slot" else col)
 
 @st.cache_data(show_spinner=False)
-def load_grid(url: str) -> pd.DataFrame:
+def load_grid() -> pd.DataFrame:
     """
     Liest das Blatt 'Herren 40–50–60' (Kopfzeile = zweite Zeile im Excel).
     Gibt Datum/Tag + Spieler-Spalten zurück.
     """
-    data = fetch_bytes(url)
+    data = fetch_bytes()
     xio = io.BytesIO(data)
     grid = pd.read_excel(xio, sheet_name="Herren 40–50–60", header=[1], dtype=str)
     grid = grid.rename(columns={grid.columns[0]: "Datum", grid.columns[1]: "Tag"})
     grid["Datum"] = pd.to_datetime(grid["Datum"], errors="coerce").dt.strftime("%Y-%m-%d")
-    # Spieler-Spalten in ursprünglicher Reihenfolge belassen:
     player_cols = [c for c in grid.columns if c not in ("Datum", "Tag")]
-    grid = grid[["Datum", "Tag"] + player_cols]
-    return grid
-
+    return grid[["Datum", "Tag"] + player_cols]
 
 # ---------- Hilfen ----------
 def parse_slot(code: str):
@@ -139,7 +182,6 @@ def parse_slot(code: str):
     hh, mm = int(m.group(2)), int(m.group(3))
     dur = int(m.group(4))
     return {"kind": kind, "start": f"{hh:02d}:{mm:02d}", "minutes": dur}
-
 
 def expand_per_player(df_plan: pd.DataFrame) -> pd.DataFrame:
     """Explodiert jede Spielplan-Zeile auf einzelne Spieler (mit Partner/Gegner)."""
@@ -160,7 +202,6 @@ def expand_per_player(df_plan: pd.DataFrame) -> pd.DataFrame:
             )
     return pd.DataFrame(rows)
 
-
 def df_week_key(d: date):
     iso = pd.Timestamp(d).isocalendar()
     return int(iso.week), int(iso.year)
@@ -171,7 +212,6 @@ PALETTE = {
     "D20:00-90 PLA":  "6D28D9", "D20:00-90 PLB":  "C4B5FD",
     "D20:30-90 PLA":  "6D28D9", "D20:30-90 PLB":  "C4B5FD",
     "D19:00-120 PLB": "C4B5FD", "D18:00-120 PLA": "6D28D9",
-
     "E18:00-60 PLA":  "10B981",
     "E19:00-60 PLA":  "14B8A6", "E19:00-60 PLB":  "14B8A6",
     "E20:00-90 PLA":  "0EA5E9", "E20:00-90 PLB":  "0EA5E9",
@@ -188,7 +228,7 @@ function(params) {{
   const hex = pal[v] || "6B7280";  // default gray
   const bg  = "#" + hex;
 
-  // quick luminance approx for text color
+  // luminance approx for text color
   const r = parseInt(hex.substr(0,2),16)/255.0;
   const g = parseInt(hex.substr(2,2),16)/255.0;
   const b = parseInt(hex.substr(4,2),16)/255.0;
@@ -215,27 +255,22 @@ def show_raster_aggrid(grid_df: pd.DataFrame):
     )
     gb.configure_column("Datum", pinned="left", width=120)
     gb.configure_column("Tag",   pinned="left", width=110)
-
-    # kleinere Spaltenbreite für Spieler-Zellen
     for col in grid_df.columns[2:]:
         gb.configure_column(col, width=150)
-
     go = gb.build()
     AgGrid(
         grid_df,
         gridOptions=go,
-        allow_unsafe_jscode=True,   # needed for custom cellStyle
+        allow_unsafe_jscode=True,
         fit_columns_on_grid_load=False,
         height=560,
-        theme="balham"              # clean, kontrastreich
+        theme="balham"
     )
-
-
 
 # ---------- Daten laden ----------
 try:
-    df = load_plan(SOURCE_URL)
-    grid_df = load_grid(SOURCE_URL)
+    df = load_plan()
+    grid_df = load_grid()
 except Exception as e:
     st.error(f"Plan konnte nicht geladen werden.\n\nFehler: {e}")
     st.stop()
@@ -253,32 +288,24 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
     ]
 )
 
-# --- 🗓️ Wochenplan (Buttons, kein DataFrame) ---
+# --- 🗓️ Wochenplan ---
 with tab1:
     st.subheader("Wochenplan")
-
     if df.empty:
         st.info("Keine Einträge.")
     else:
-        # Hilfsfunktionen fürs Sortieren/Parsen
         def slot_key(s: str):
             m = SLOT_RE.match(str(s))
-            if not m:
-                return (99, 99)
-            return (int(m.group(2)), int(m.group(3)))  # hh, mm
+            return (int(m.group(2)), int(m.group(3))) if m else (99, 99)
 
         df["KW"] = df["Date"].apply(lambda d: pd.Timestamp(d).isocalendar().week)
         df["Jahr"] = df["Date"].apply(lambda d: pd.Timestamp(d).isocalendar().year)
-
-        # verfügbare Wochen (Jahr, KW)
         weeks = sorted({(int(r["Jahr"]), int(r["KW"])) for _, r in df.iterrows()})
 
-        # aktuelle KW bestimmen
         today = pd.Timestamp.today().date()
         kw_now  = pd.Timestamp(today).isocalendar().week
         yr_now  = pd.Timestamp(today).isocalendar().year
 
-        # initiale Woche wählen (heutige, sonst nächste/erste)
         if "week_idx" not in st.session_state:
             if (yr_now, kw_now) in weeks:
                 st.session_state.week_idx = weeks.index((yr_now, kw_now))
@@ -286,7 +313,6 @@ with tab1:
                 future = [i for i, wk in enumerate(weeks) if wk > (yr_now, kw_now)]
                 st.session_state.week_idx = future[0] if future else 0
 
-        # Navigation
         left, mid, right = st.columns([1, 6, 1])
         prev_disabled = st.session_state.week_idx <= 0
         next_disabled = st.session_state.week_idx >= len(weeks) - 1
@@ -302,19 +328,16 @@ with tab1:
 
         st.markdown(f"### Kalenderwoche {show_kw}, {show_year}")
 
-        # Darstellung ohne Tabelle – pro Tag Abschnitt mit Slots als Liste
         for the_date in sorted(week_df["Date"].unique()):
             day_name = week_df.loc[week_df["Date"] == the_date, "Day"].iloc[0]
             st.markdown(f"**{day_name}, {the_date:%Y-%m-%d}**")
-
             day_rows = week_df[week_df["Date"] == the_date]
             for _, r in day_rows.iterrows():
-                players_text = (
-                    r["Players"] if "/" in str(r["Players"]) else " / ".join(r["PlayerList"])
-                )
+                # render players nicely
+                plist = r["PlayerList"]
+                players_text = " / ".join(plist) if plist else str(r["Players"])
                 art = "Einzel" if r["Typ"] == "Einzel" else "Doppel"
                 st.markdown(f"- `{r['Slot']}` — *{art}*  \n  {players_text}")
-
             st.divider()
 
 # --- 👤 Einzelspieler ---
@@ -340,22 +363,18 @@ with tab3:
     st.subheader("Komplettplan (alle Einträge)")
     full = df.rename(columns={"Date": "Datum", "Day": "Tag", "Players": "Spieler"})
     st.dataframe(full[["Datum", "Tag", "Slot", "Typ", "Spieler"]], use_container_width=True, hide_index=True)
-
     csv = full[["Datum", "Tag", "Slot", "Typ", "Spieler"]].to_csv(index=False).encode("utf-8")
     st.download_button("CSV herunterladen", data=csv, file_name="Komplettplan.csv", mime="text/csv")
 
 # --- 💶 Kosten (17,50 €/h korrekt) ---
 with tab4:
     st.subheader("Spieler-Kosten (17,50 € pro Platz-Stunde)")
-
-    # pro Einsatz aufsplitten
     rows = []
     for _, r in df.iterrows():
         slot = SLOT_RE.match(str(r["Slot"]))
         if not slot:
             continue
         minutes = int(slot.group(4))
-        kind = slot.group(1).upper()
         total = (minutes / 60.0) * HOURLY_RATE
         n = 2 if r["Typ"] == "Einzel" else 4
         share = total / n
@@ -373,7 +392,6 @@ with tab4:
                 }
             )
     cost_df = pd.DataFrame(rows)
-
     if cost_df.empty:
         st.info("Keine Einträge vorhanden.")
     else:
@@ -403,7 +421,6 @@ with tab4:
 # --- 🧱 Raster (Herren 40–50–60) ---
 with tab5:
     st.subheader("Herren 40–50–60 – Rasteransicht")
-    # kleine Legende
     st.markdown(
         "Legende:&nbsp; "
         "<span style='background:#1D4ED8;color:#fff;padding:2px 6px;border-radius:6px;'>D20:00-120 PLA</span> "
@@ -413,6 +430,3 @@ with tab5:
         unsafe_allow_html=True
     )
     show_raster_aggrid(grid_df)
-
-
-
