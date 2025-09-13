@@ -372,9 +372,12 @@ with tab3:
     csv = full[["Datum", "Tag", "Slot", "Typ", "Spieler"]].to_csv(index=False).encode("utf-8")
     st.download_button("CSV herunterladen", data=csv, file_name="Komplettplan.csv", mime="text/csv")
 
+
 # --- 💶 Kosten (17,50 €/h korrekt) ---
 with tab4:
     st.subheader("Spieler-Kosten (17,50 € pro Platz-Stunde)")
+
+    # pro Einsatz aufsplitten (nur für Aggregation)
     rows = []
     for _, r in df.iterrows():
         slot = SLOT_RE.match(str(r["Slot"]))
@@ -398,9 +401,11 @@ with tab4:
                 }
             )
     cost_df = pd.DataFrame(rows)
+
     if cost_df.empty:
         st.info("Keine Einträge vorhanden.")
     else:
+        # Nur Aggregation je Spieler anzeigen
         agg = (
             cost_df.groupby("Spieler", as_index=False)
             .agg(
@@ -413,16 +418,15 @@ with tab4:
         st.markdown("**Gesamt je Spieler**")
         st.dataframe(agg, use_container_width=True, hide_index=True, height=360)
 
-        st.markdown("—")
-        st.markdown("**Details je Einsatz**")
-        cost_detail = cost_df.sort_values(["Spieler", "Datum", "Slot"]).rename(columns={"Datum": "Datum", "Tag": "Tag"})
-        st.dataframe(cost_detail, use_container_width=True, hide_index=True, height=420)
-
+        # Nur CSV der Aggregation anbieten
         csv1 = agg.to_csv(index=False).encode("utf-8")
-        st.download_button("Kosten je Spieler – CSV", data=csv1, file_name="Kosten_pro_Spieler.csv", mime="text/csv")
+        st.download_button(
+            "Kosten je Spieler – CSV",
+            data=csv1,
+            file_name="Kosten_pro_Spieler.csv",
+            mime="text/csv",
+        )
 
-        csv2 = cost_detail.to_csv(index=False).encode("utf-8")
-        st.download_button("Kosten je Einsatz – CSV", data=csv2, file_name="Kosten_pro_Einsatz.csv", mime="text/csv")
 
 # --- 🧱 Raster (Herren 40–50–60) ---
 with tab5:
@@ -436,4 +440,5 @@ with tab5:
         unsafe_allow_html=True
     )
     show_raster_aggrid(grid_df)
+
 
