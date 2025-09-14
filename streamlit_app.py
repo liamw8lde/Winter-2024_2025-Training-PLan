@@ -217,12 +217,15 @@ def load_grid(url: str) -> pd.DataFrame:
 NAME_DIACRITICS = "äöüß"
 
 def normalize_name(s: str) -> str:
-    s = (s or "").strip().replace("\xa0", " ")
-    s = unicodedata.normalize("NFKD", s).lower()
+    s = (s or "").replace("\xa0", " ")
+    # remove zero-width & control chars
+    s = "".join(ch for ch in s if (ord(ch) >= 32 and ch not in "\u200b\u200c\u200d\uFEFF"))
+    s = unicodedata.normalize("NFKD", s).lower().strip()
     s = s.replace("ä","ae").replace("ö","oe").replace("ü","ue").replace("ß","ss")
     s = "".join(ch for ch in s if not unicodedata.combining(ch))
     s = re.sub(r"\s+", " ", s)
     return s
+
 
 def build_name_map(all_names: list[str]) -> dict:
     by_key = defaultdict(Counter)
@@ -497,3 +500,4 @@ with tab5:
         unsafe_allow_html=True,
     )
     show_raster_aggrid(grid_df)
+
