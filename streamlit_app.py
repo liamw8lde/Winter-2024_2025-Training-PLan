@@ -4,7 +4,7 @@
 # Tabs: Wochenplan (KW-Ansicht), Einzelspieler, Komplettplan,
 #       Kosten (17,50 €/h korrekt umgelegt), Raster (Herren 40–50–60)
 # Requirements:
-#  - Sidebar entfernt
+#  - Sidebar entfernt/ausgeblendet
 #  - XLSX-Quelle fest im Code (keine Uploads/Eingaben)
 #  - Passwortschutz: "TGR2025"
 #  - Kosten: KEINE "Details je Einsatz"-Tabelle/CSV
@@ -13,10 +13,12 @@
 import io
 import re
 import json
+import unicodedata
 import requests
 import pandas as pd
 import streamlit as st
 from datetime import date
+from collections import Counter, defaultdict
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 # ---------- Seite / Layout ----------
@@ -55,8 +57,21 @@ if not st.session_state.auth_ok:
     st.stop()
 
 # ---------- Konstanten ----------
-HOURLY_RATE = 17.50  # € pro Stunde (Platzmiete)
+HOURLY_RATE = 17.50  # € pro Platzstunde
 SLOT_RE = re.compile(r"^([DE])(\d{2}):(\d{2})-([0-9]+)\s+PL([AB])$", re.IGNORECASE)
+
+# Farbpalette (exakt lt. Vorgabe)
+PALETTE = {
+    "D20:00-120 PLA": "1D4ED8",
+    "D20:00-120 PLB": "F59E0B",
+    "D20:00-90 PLA":  "6D28D9",
+    "D20:00-90 PLB":  "C4B5FD",
+    "E18:00-60 PLA":  "10B981",
+    "E19:00-60 PLA":  "14B8A6",
+    "E19:00-60 PLB":  "2DD4BF",
+    "E20:00-90 PLA":  "0EA5E9",
+    "E20:00-90 PLB":  "38BDF8",
+}
 
 # ---------- Datenquelle ----------
 # Fest verdrahtete RAW-URL (keine UI-Steuerung)
@@ -81,25 +96,20 @@ def _rename_like(df: pd.DataFrame, new_map: dict) -> pd.DataFrame:
     return df.rename(columns=ren)
 
 def _parse_player_list(value: str) -> list[str]:
-    s = str(value or "").strip()
-    if not s:
-        return []
-    s = (
-        s.replace(" & ", ", ")
-        .replace("&", ",")
-        .replace(" vs ", ",")
-        .replace("/", ",")
-    )
+    """Robuster Split (Umlaut/NBSP/verschiedene Trenner)."""
+    s = str(value or "")
+    s = s.replace("\xa0", " ")  # NBSP -> space
+    # split on &, /, "vs", newlines, semicolons, em/en-dash
+    s = re.sub(r"\s*[&/]\s*|\s+vs\s+|[\n;]\s*|[–—]\s*", ", ", s, flags=re.IGNORECASE)
     parts = [p.strip() for p in s.split(",") if p.strip()]
+    # de-dupe preserving order
     seen, out = set(), []
     for p in parts:
         if p not in seen:
-            seen.add(p)
-            out.append(p)
+            seen.add(p); out.append(p)
     return out
 
 def _slot_sort_key(series: pd.Series) -> pd.Series:
-    # Sortierung nach Startzeit HH:MM aus Slot-Code
     def slot_key(s):
         m = SLOT_RE.match(str(s))
         return (int(m.group(2)), int(m.group(3))) if m else (99, 99)
@@ -136,17 +146,28 @@ def load_plan(url: str) -> pd.DataFrame:
     except Exception:
         pass
 
-    # 2) Fallback: Raster
-    xio.seek(0)
-    grid = pd.read_excel(xio, sheet_name="Herren 40–50–60", header=[1], dtype=str)
+    # 2) Fallback: Raster ("Herren 40–50–60")
+    def try_load_grid_header(xio_obj, header_row):
+        xio_obj.seek(0)
+        return pd.read_excel(xio_obj, sheet_name="Herren 40–50–60", header=header_row, dtype=str)
+
+    grid = None
+    for hdr in (1, 0):  # erst header=[1] (Titelzeile), dann fallback header=0
+        try:
+            grid = try_load_grid_header(xio, hdr)
+            break
+        except Exception:
+            continue
+    if grid is None:
+        return pd.DataFrame(columns=["Date","Day","Slot","Typ","Players","PlayerList"])
+
     grid = grid.rename(columns={grid.columns[0]: "Date", grid.columns[1]: "Day"})
     grid["Date"] = pd.to_datetime(grid["Date"], errors="coerce").dt.date
-    player_cols = list(grid.columns[2:])
+    player_cols = [c for c in grid.columns[2:] if c not in (None, "")]
 
     rows = []
     for _, r in grid.iterrows():
-        dd = r["Date"]
-        day = r["Day"]
+        dd = r["Date"]; day = r["Day"]
         bucket = {}
         for p in player_cols:
             code = str(r.get(p, "") or "").strip()
@@ -171,107 +192,50 @@ def load_plan(url: str) -> pd.DataFrame:
 def load_grid(url: str) -> pd.DataFrame:
     data = fetch_bytes(url)
     xio = io.BytesIO(data)
-    grid = pd.read_excel(xio, sheet_name="Herren 40–50–60", header=[1], dtype=str)
+
+    def try_load(header_row):
+        xio.seek(0)
+        return pd.read_excel(xio, sheet_name="Herren 40–50–60", header=header_row, dtype=str)
+
+    grid = None
+    for hdr in (1, 0):
+        try:
+            grid = try_load(hdr)
+            break
+        except Exception:
+            continue
+
+    if grid is None or grid.shape[1] < 2:
+        return pd.DataFrame(columns=["Datum", "Tag"])
+
     grid = grid.rename(columns={grid.columns[0]: "Datum", grid.columns[1]: "Tag"})
     grid["Datum"] = pd.to_datetime(grid["Datum"], errors="coerce").dt.strftime("%Y-%m-%d")
     player_cols = [c for c in grid.columns if c not in ("Datum", "Tag")]
     return grid[["Datum", "Tag"] + player_cols]
 
-# ---------- Hilfen ----------
-def parse_slot(code: str):
-    m = SLOT_RE.match(str(code or ""))
-    if not m:
-        return None
-    kind = m.group(1).upper()
-    hh, mm = int(m.group(2)), int(m.group(3))
-    dur = int(m.group(4))
-    return {"kind": kind, "start": f"{hh:02d}:{mm:02d}", "minutes": dur}
+# ---------- Namens-Normalisierung ----------
+NAME_DIACRITICS = "äöüß"
 
-def expand_per_player(df_plan: pd.DataFrame) -> pd.DataFrame:
-    rows = []
-    for _, r in df_plan.iterrows():
-        plist = r["PlayerList"]
-        for p in plist:
-            others = [x for x in plist if x != p]
-            rows.append(
-                {
-                    "Spieler": p,
-                    "Datum": r["Date"],
-                    "Tag": r["Day"],
-                    "Typ": r["Typ"],
-                    "Slot": r["Slot"],
-                    "Partner/Gegner": " / ".join(others),
-                }
-            )
-    return pd.DataFrame(rows)
+def normalize_name(s: str) -> str:
+    s = (s or "").strip().replace("\xa0", " ")
+    s = unicodedata.normalize("NFKD", s).lower()
+    s = s.replace("ä","ae").replace("ö","oe").replace("ü","ue").replace("ß","ss")
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    s = re.sub(r"\s+", " ", s)
+    return s
 
-def df_week_key(d: date):
-    iso = pd.Timestamp(d).isocalendar()
-    return int(iso.week), int(iso.year)
+def build_name_map(all_names: list[str]) -> dict:
+    by_key = defaultdict(Counter)
+    for n in all_names:
+        by_key[normalize_name(n)][n] += 1
 
-# Farbpalette (exakt lt. Vorgabe)
-PALETTE = {
-    "D20:00-120 PLA": "1D4ED8",
-    "D20:00-120 PLB": "F59E0B",
-    "D20:00-90 PLA":  "6D28D9",
-    "D20:00-90 PLB":  "C4B5FD",
-    "E18:00-60 PLA":  "10B981",
-    "E19:00-60 PLA":  "14B8A6",
-    "E19:00-60 PLB":  "2DD4BF",
-    "E20:00-90 PLA":  "0EA5E9",
-    "E20:00-90 PLB":  "38BDF8",
-}
+    def pick_display(counter: Counter) -> str:
+        # bevorzugt Varianten mit ä/ö/ü/ß; sonst häufigste Schreibweise
+        with_diac = [n for n in counter if any(ch in NAME_DIACRITICS for ch in n)]
+        pool = with_diac or list(counter)
+        return sorted(pool, key=lambda n: (-counter[n], n))[0]
 
-CELLSTYLE = JsCode(
-    f"""
-function(params) {{
-  if (!params.value) {{ return {{}}; }}
-  const v = String(params.value).trim();
-  const pat = /^([DE])\\d{{2}}:\\d{{2}}-\\d+\\s+PL[AB]$/;
-  if (!pat.test(v)) {{ return {{}}; }}
-  const pal = {json.dumps(PALETTE)};
-  const hex = pal[v] || "6B7280";  // default gray
-  const bg  = "#" + hex;
-
-  // quick luminance approx for text color
-  const r = parseInt(hex.substr(0,2),16)/255.0;
-  const g = parseInt(hex.substr(2,2),16)/255.0;
-  const b = parseInt(hex.substr(4,2),16)/255.0;
-  const lum = 0.2126*r + 0.7152*g + 0.0722*b;
-  const fg  = (lum < 0.55) ? "white" : "black";
-
-  return {{
-    backgroundColor: bg,
-    color: fg,
-    fontWeight: "600",
-    textAlign: "center",
-    borderRight: "1px solid #eee",
-  }};
-}}
-"""
-)
-
-def show_raster_aggrid(grid_df: pd.DataFrame):
-    gb = GridOptionsBuilder.from_dataframe(grid_df)
-    gb.configure_default_column(
-        resizable=True,
-        wrapText=True,
-        autoHeight=True,
-        cellStyle=CELLSTYLE,
-    )
-    gb.configure_column("Datum", pinned="left", width=120)
-    gb.configure_column("Tag", pinned="left", width=110)
-    for col in grid_df.columns[2:]:
-        gb.configure_column(col, width=150)
-    go = gb.build()
-    AgGrid(
-        grid_df,
-        gridOptions=go,
-        allow_unsafe_jscode=True,
-        fit_columns_on_grid_load=False,
-        height=560,
-        theme="balham",
-    )
+    return {k: pick_display(cnt) for k, cnt in by_key.items()}
 
 # ---------- Daten laden ----------
 try:
@@ -280,6 +244,31 @@ try:
 except Exception as e:
     st.error(f"Plan konnte nicht geladen werden.\n\nFehler: {e}")
     st.stop()
+
+# Build canonical display names based on what exists in the plan
+_all_raw = [p for plist in df["PlayerList"] for p in plist]
+NAME_MAP = build_name_map(_all_raw)
+
+def expand_per_player(df_plan: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for _, r in df_plan.iterrows():
+        plist = r["PlayerList"]
+        for p in plist:
+            key = normalize_name(p)
+            disp = NAME_MAP.get(key, p)
+            others = [x for x in plist if x != p]
+            rows.append(
+                {
+                    "SpielerKey": key,
+                    "Spieler": disp,  # display-friendly
+                    "Datum": r["Date"],
+                    "Tag": r["Day"],
+                    "Typ": r["Typ"],
+                    "Slot": r["Slot"],
+                    "Partner/Gegner": " / ".join(others),
+                }
+            )
+    return pd.DataFrame(rows)
 
 per_player = expand_per_player(df)
 
@@ -298,6 +287,7 @@ def build_cost_rows(df_plan: pd.DataFrame) -> pd.DataFrame:
             rows.append(
                 {
                     "Spieler": p,
+                    "SpielerKey": normalize_name(p),
                     "Datum": r["Date"],
                     "Tag": r["Day"],
                     "Typ": r["Typ"],
@@ -372,29 +362,32 @@ with tab1:
 # --- 👤 Einzelspieler ---
 with tab2:
     st.subheader("Einzelspieler – Einsätze")
-    all_players = sorted(set([p for plist in df["PlayerList"] for p in plist]))
-    sel = st.selectbox("Spieler", options=all_players, index=0 if all_players else None)
-    if sel:
-        mine = per_player[per_player["Spieler"] == sel].copy()
-        mine = mine.rename(columns={"Datum": "Datum", "Tag": "Tag", "Slot": "Slot", "Typ": "Art"})
+    if per_player.empty:
+        st.info("Keine Einsätze gefunden.")
+    else:
+        all_keys = sorted(per_player["SpielerKey"].unique())
+        options = [NAME_MAP.get(k, k.title()) for k in all_keys]
+        key_by_display = {NAME_MAP.get(k, k.title()): k for k in all_keys}
 
-        # Mini-Kosten-Übersicht für den gewählten Spieler (ohne Detailtabelle)
+        # Try to start on "Kai Schröder" if present, else first
+        default_disp = "Kai Schröder" if "Kai Schröder" in options else options[0]
+        sel_disp = st.selectbox("Spieler", options=options, index=options.index(default_disp))
+        sel_key = key_by_display[sel_disp]
+
+        mine = per_player[per_player["SpielerKey"] == sel_key].copy()
+        # Mini-Kosten-Übersicht (ohne Details-Tabelle)
         if not cost_df.empty:
-            mine_cost = cost_df[cost_df["Spieler"] == sel]
-            teilnahmen = int(mine_cost["Anteil Spieler (€)"].count()) if not mine_cost.empty else 0
-            minuten = int(mine_cost["Minuten"].sum()) if not mine_cost.empty else 0
-            summe = float(mine_cost["Anteil Spieler (€)"].sum()) if not mine_cost.empty else 0.0
-
+            mc = cost_df[cost_df["SpielerKey"] == sel_key]
             a, b, c = st.columns(3)
-            a.metric("Einsätze", f"{teilnahmen}")
-            b.metric("Minuten", f"{minuten}")
-            c.metric("Summe", f"{summe:,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."))
+            a.metric("Einsätze", f"{int(mc.shape[0])}")
+            b.metric("Minuten", f"{int(mc['Minuten'].sum())}")
+            c.metric("Summe", f"{float(mc['Anteil Spieler (€)'].sum()):,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."))
 
         if mine.empty:
             st.info("Keine Einsätze gefunden.")
         else:
             st.dataframe(
-                mine[["Datum", "Tag", "Art", "Slot", "Partner/Gegner"]],
+                mine[["Datum", "Tag", "Typ", "Slot", "Partner/Gegner"]].rename(columns={"Typ": "Art"}),
                 use_container_width=True,
                 hide_index=True,
                 height=460,
@@ -415,18 +408,21 @@ with tab4:
         st.info("Keine Einträge vorhanden.")
     else:
         agg = (
-            cost_df.groupby("Spieler", as_index=False)
+            cost_df.groupby(["SpielerKey"], as_index=False)
             .agg(
                 Teilnahmen=("Anteil Spieler (€)", "count"),
                 Minuten=("Minuten", "sum"),
                 Summe=("Anteil Spieler (€)", "sum"),
             )
-            .sort_values(["Summe", "Spieler"], ascending=[False, True])
         )
+        # hübsche Anzeige-Namen aus NAME_MAP
+        agg["Spieler"] = agg["SpielerKey"].map(lambda k: NAME_MAP.get(k, k.title()))
+        agg = agg[["Spieler", "Teilnahmen", "Minuten", "Summe"]].sort_values(["Summe", "Spieler"], ascending=[False, True])
+
         st.markdown("**Gesamt je Spieler**")
         st.dataframe(agg, use_container_width=True, hide_index=True, height=360)
 
-        # Nur CSV der Aggregation (KEINE Detailtabelle/CSV hier!)
+        # Nur CSV der Aggregation (KEINE Detailtabelle/CSV)
         csv1 = agg.to_csv(index=False).encode("utf-8")
         st.download_button(
             "Kosten je Spieler – CSV",
@@ -436,6 +432,55 @@ with tab4:
         )
 
 # --- 🧱 Raster (Herren 40–50–60) ---
+CELLSTYLE = JsCode(
+    f"""
+function(params) {{
+  if (!params.value) {{ return {{}}; }}
+  const v = String(params.value).trim();
+  const pat = /^([DE])\\d{{2}}:\\d{{2}}-\\d+\\s+PL[AB]$/;
+  if (!pat.test(v)) {{ return {{}}; }}
+  const pal = {json.dumps(PALETTE)};
+  const hex = pal[v] || "6B7280";  // default gray
+  const bg  = "#" + hex;
+  // quick luminance approx for text color
+  const r = parseInt(hex.substr(0,2),16)/255.0;
+  const g = parseInt(hex.substr(2,2),16)/255.0;
+  const b = parseInt(hex.substr(4,2),16)/255.0;
+  const lum = 0.2126*r + 0.7152*g + 0.0722*b;
+  const fg  = (lum < 0.55) ? "white" : "black";
+  return {{
+    backgroundColor: bg,
+    color: fg,
+    fontWeight: "600",
+    textAlign: "center",
+    borderRight: "1px solid #eee",
+  }};
+}}
+"""
+)
+
+def show_raster_aggrid(grid_df: pd.DataFrame):
+    gb = GridOptionsBuilder.from_dataframe(grid_df)
+    gb.configure_default_column(
+        resizable=True,
+        wrapText=True,
+        autoHeight=True,
+        cellStyle=CELLSTYLE,
+    )
+    gb.configure_column("Datum", pinned="left", width=120)
+    gb.configure_column("Tag", pinned="left", width=110)
+    for col in grid_df.columns[2:]:
+        gb.configure_column(col, width=150)
+    go = gb.build()
+    AgGrid(
+        grid_df,
+        gridOptions=go,
+        allow_unsafe_jscode=True,
+        fit_columns_on_grid_load=False,
+        height=560,
+        theme="balham",
+    )
+
 with tab5:
     st.subheader("Herren 40–50–60 – Rasteransicht")
     st.markdown(
