@@ -1,0 +1,304 @@
+📋 SANITY CHECK – Winter Training (Iterative Audit + Repair)
+
+You are my auditor and repairer. Run a FULL audit, repair all resolvable violations, and RE‑AUDIT repeatedly until the plan is stable (no new violations) or only flagged UNREPAIRABLE items remain. Output everything requested at the end.
+
+PARAMETERS (read first)
+- INPUT FILE: One Excel/CSV file (the plan). Use ONLY this file + the rules below. No external data.
+- FROZEN WEEKS (optional): If I provide ISO weeks to freeze (e.g., {year:2025, weeks:[38]}), do NOT modify matches that occur in those ISO weeks; still AUDIT them and report violations.
+- STABILITY: After every repair pass you MUST re-run the full audit. Repeat until stable or max 10 passes.
+- PRIORITY: HARD rules must be satisfied before any SOFT advisories. If a conflict cannot be solved without breaking another HARD rule, mark as UNREPAIRABLE (do not delete the row).
+
+------------------------------------------------------------
+HOW TO PARSE THE PLAN
+1) Prefer the sheet named “Spielplan”.
+2) If missing, reconstruct from the “Herren 40–50–60” grid:
+   - For each row (date), group players by identical slot code; emit one row per group.
+   - Typ = Einzel if headcount = 2, otherwise Doppel if headcount = 4.
+3) Slot code is valid iff it matches:
+   ^([DE])(\d{2}):(\d{2})-([0-9]+)\s+PL([AB])$
+4) Headcount expectations: Einzel = 2, Doppel = 4.
+5) Compute ISO week (Year + Week) from Datum for weekly rules and coverage.
+6) Normalize player names to a canonical set (trim, collapse spaces, unify ß/ss, umlauts, and case).
+
+------------------------------------------------------------
+ALLOWED SLOTS (STRICT)  —  “weekday + code + court + duration” must match exactly
+- Montag
+  - D20:00-120 PLA — Doppel
+  - D20:00-120 PLB — Doppel
+- Mittwoch
+  - E18:00-60 PLA — Einzel (note: PLB at 18:00 is illegal)
+  - E19:00-60 PLA — Einzel
+  - E19:00-60 PLB — Einzel
+  - D20:00-90 PLA — Doppel
+  - D20:00-90 PLB — Doppel
+- Donnerstag
+  - E20:00-90 PLA — Einzel
+  - E20:00-90 PLB — Einzel
+
+WEEKLY COVERAGE (STRICT)
+- For EACH ISO week, every allowed weekday/slot combination above must appear EXACTLY ONCE.
+- Missing or duplicate required slots = violation `weekly_coverage`.
+
+------------------------------------------------------------
+GLOBAL TIME RULES (HARD)
+- No starts after 20:00 (e.g., 20:30 illegal).
+- Wednesday doubles must be exactly 20:00 for 90 min.
+- Duration/court must match the slot code exactly.
+
+------------------------------------------------------------
+PROTECTED PLAYERS (HARD)
+- Patrick Buehrsch → 18:00 only.
+- Frank Petermann → only 19:00 or 20:00 (never 18:00).
+- Matthias Duddek → only 18:00 or 19:00 (never ≥20:00).
+- Dirk Kistner → Mo/Mi/Do only; on Wednesday only 19:00 (never 18:00 or 20:00); max 2/week.
+- Arndt Stüber → only Wednesday 19:00.
+- Thommy/Thomas Grüneberg → start 18:00 or 19:00 70% of the time; 30% Wednesday 20:00.
+- Jens Hafner → only Wednesday 19:00.
+
+WOMEN & SINGLES (HARD)
+- Women (Anke Ihde, Lena Meiß/Meiss, Martina Schmidt, Kerstin Baarck) must NOT play singles.
+- Any female in singles = violation `womens_singles` (mixed singles included).
+
+------------------------------------------------------------
+MONDAY CORE SLOT (HARD) — Montag D20:00–120 PLA
+1) Mandatory Core:
+   - Martin Lange and Bjoern Junker must always be present unless on holiday.
+   - The other two players must be chosen ONLY from {Frank Petermann, Lars Staubermann, Peter Plähn}, rotated evenly across the season.
+2) Exclusions:
+   - No women ever (except: Lena Meiß allowed ONLY if Liam Wilde is also one of the four).
+   - Mohamad Albadry is NEVER allowed.
+   - No other substitutes allowed (e.g., Tobias Kahl, Gunnar Brix, etc.).
+3) Holiday Exception:
+   - If >1 core player is missing and not on holiday → violation `mon_pla_core` (flag UNREPAIRABLE if no legal fill).
+   - Do not fill with outsiders unless explicitly permitted above.
+4) Enforcement Order:
+   - Enforce this rule BEFORE any other repairs for that row; a row passing other checks but failing this must be repaired again.
+
+------------------------------------------------------------
+ONE-PER-DAY (HARD)
+- A player may not appear more than once per calendar date.
+
+WEEKLY CAPS / SEASON CAPS (HARD unless specified)
+- Weekly caps:
+  - Tobias Kahl: max 1/week
+  - Dirk Kistner: max 2/week
+  - Torsten Bartel: max 1/week
+- Season caps:
+  - Torsten Bartel: max 5/season
+  - Frank Petermann: max 12/season (Monday PLA still counts toward this cap)
+
+------------------------------------------------------------
+HOLIDAYS / BLACKOUTS (AUTHORITATIVE)
+- Use ONLY the list below for holiday checks (prompt wins on overlap).
+- Monday PLA core exemption: in that slot ONLY, the core four are exempt from holiday checks (caps still apply).
+
+<<START MERGED HOLIDAYS LIST>>
+- Kerstin Baarck: 2025-09-01 → 2025-09-30.
+- Lena Meiß/Meiss: (blocked up to and including 2025-09-20).
+- Oliver Böss: 2025-09-01 → 2025-09-30; 2025-12-01; 2025-12-07; 2025-12-24 → 2025-12-25.
+- Karsten/Carsten Gambal: 2025-11-12; 2025-11-13; 2025-12-24; 2025-12-29.
+- Karsten Usinger: 2025-09-01 → 2025-09-30; 2025-12-31.
+- Wolfgang Aleksik: 2025-09-16; 2025-09-18; 2025-10-14; 2025-11-25; 2025-11-27; 2025-12-09; 2025-12-11; 2025-12-23 → 2025-12-31.
+- Jens Krause: 2025-09-24; 2025-09-26.
+- Michael Rabehl: 2025-10-09 → 2025-10-12.
+- Jens Hafner: 2025-10-23; 2025-10-30; 2025-12-24 → 2025-12-26.
+- Bernd Sotzek: No holidays.
+- Heiko Thomsen: 2025-09-15; 2025-10-10; 2025-11-12; 2025-12-03; 2025-12-17; 2025-12-22; 2025-12-24; 2025-12-26; 2025-12-31.
+- Frank Petermann: 2025-09-08; 2025-09-14; 2025-10-13; 2025-10-25; 2025-12-01; 2025-12-07; 2025-12-24; 2025-12-31.
+- Liam Wilde: 2025-12-24.
+- Matthias Duddek: 2025-11-04 → 2025-11-10; 2025-12-24 → 2025-12-31.
+- Anke Ihde: 2025-09-25.
+- Arndt Stüber: 2025-10-16; 2025-10-31; 2025-11-17; 2025-11-23; 2025-12-15; 2025-12-31.
+- Bernd Robioneck: 2025-12-01; 2025-12-08; 2025-12-22; 2026-01-04.
+- Björn Junker: 2025-10-25; 2025-10-31; 2025-12-20; 2025-12-31.
+- Frank Koller: 2025-10-10; 2025-10-31; 2025-12-18; 2026-01-05.
+- Gunnar Brix: 2025-09-26; 2025-10-06; 2025-10-11; 2025-10-20; 2025-10-25; 2025-11-17; 2025-11-22; 2025-12-22; 2025-12-31.
+- Jörg Peters: 2025-12-22; 2026-01-02.
+- Jürgen Hansen: 2025-12-22; 2026-01-04.
+- Kai Schröder: 2025-10-06; 2025-10-12; 2025-12-01; 2025-12-06; 2025-12-22; 2025-12-27.
+- Markus Münch: 2025-10-13; 2025-10-19; 2025-12-22; 2026-01-04.
+- Martin Lange: 2025-12-22; 2026-01-04.
+- Martina Schmidt: 2025-11-08; 2025-11-22; 2026-01-01.
+- Michael Bock: 2025-12-20; 2026-01-04.
+- Patrick Buehrsch: 2025-11-01; 2025-11-30.
+- Ralf Colditz: 2025-09-08; 2025-09-30; 2025-12-22; 2026-01-03.
+- Sebastian Braune: 2025-10-20; 2025-10-30; 2025-12-28; 2026-01-06.
+- Tobias Kahl: 2025-09-14; 2025-09-23; 2025-10-09; 2025-10-20; 2025-10-31; 2025-12-22; 2025-12-31.
+- Torsten Bartel: 2025-09-15; 2025-09-24; 2025-09-29; 2025-11-19; 2025-11-24; 2025-12-17; 2025-12-22; 2025-12-25.
+<<END MERGED HOLIDAYS LIST>>
+
+------------------------------------------------------------
+WEEKDAY AVAILABILITY (JOTFORM)
+- Use the list below when not overridden by “Protected Players” or explicit prompt rules.
+
+<<START JOTFORM WEEKDAY AVAILABILITY LIST>>
+- Andreas Dank: Montag, Mittwoch
+- Anke Ihde: Montag, Mittwoch, Donnerstag
+- Arndt Stüber: Mittwoch
+- Bernd Robioneck: Mittwoch, Donnerstag
+- Bernd Sotzek: Montag, Mittwoch
+- Björn Junker: Montag
+- Carsten Gambal: Montag, Mittwoch, Donnerstag
+- Dirk Kistner: Montag, Mittwoch, Donnerstag
+- Frank Koller: Mittwoch, Donnerstag
+- Frank Petermann: Montag, Mittwoch, Donnerstag
+- Gunnar Brix: Montag, Mittwoch, Donnerstag
+- Heiko Thomsen: Mittwoch
+- Jan Pappenheim: Montag, Mittwoch, Donnerstag
+- Jens Hafner: Montag, Mittwoch
+- Jens Krause: Mittwoch
+- Jörg Peters: Mittwoch
+- Jürgen Hansen: Mittwoch
+- Kai Schröder: Mittwoch
+- Karsten Usinger: Mittwoch, Donnerstag
+- Kerstin Baarck: Montag, Donnerstag
+- Lars Staubermann: Montag, Donnerstag
+- Lena Meiß: Montag, Donnerstag
+- Liam Wilde: Montag, Donnerstag
+- Lorenz Kramp: Montag, Mittwoch
+- Manfred Grell: Mittwoch, Donnerstag
+- Markus Münch: Mittwoch, Sonntag
+- Martin Lange: Montag
+- Martina Schmidt: Montag, Mittwoch, Donnerstag
+- Matthias Duddek: Montag, Mittwoch, Donnerstag
+- Michael Bock: Montag, Mittwoch
+- Michael Rabehl: Montag, Donnerstag
+- Mohamad Albadry: Montag
+- Oliver Böss: Mittwoch, Donnerstag
+- Patrick Buehrsch: Mittwoch, Donnerstag
+- Peter Plähn: Montag
+- Ralf Colditz: Mittwoch
+- Sebastian Braune: Montag, Donnerstag
+- Thomas Bretschneider: Donnerstag
+- Thomas Grüneberg: Mittwoch, Donnerstag
+- Tobias Kahl: Montag, Mittwoch
+- Torsten Bartel: Montag, Mittwoch, Donnerstag
+- Wolfgang Aleksik: Mittwoch
+<<END JOTFORM WEEKDAY AVAILABILITY LIST>>
+
+------------------------------------------------------------
+PLAYER RANKS (AUTHORITATIVE)
+- 1 = strongest … 6 = weakest. If missing, treat as unknown (skip rank checks) and emit parsing warning.
+
+<<START PLAYER RANKS>>
+- Andreas Dank: 5
+- Anke Ihde: 6
+- Arndt Stueber: 5
+- Bernd Robioneck: 5
+- Bernd Sotzek: 3
+- Bjoern Junker: 1
+- Carsten Gambal: 4
+- Dirk Kistner: 5
+- Frank Koller: 4
+- Frank Petermann: 2
+- Gunnar Brix: 6
+- Heiko Thomsen: 4
+- Jan Pappenheim: 5
+- Jens Hafner: 6
+- Jens Krause: 2
+- Joerg Peters: 2
+- Juergen Hansen: 3
+- Kai Schroeder: 4
+- Karsten Usinger: 3
+- Kerstin Baarck: 6
+- Lars Staubermann: 2
+- Lena Meiss: 6
+- Liam Wilde: 3
+- Lorenz Kramp: 4
+- Manfred Grell: 4
+- Markus Muench: 5
+- Martin Lange: 2
+- Martina Schmidt: 6
+- Matthias Duddek: 3
+- Michael Bock: 6
+- Michael Rabehl: 6
+- Mohamad Albadry: 5
+- Oliver Boess: 3
+- Patrick Buehrsch: 1
+- Peter Plaehn: 2
+- Ralf Colditz: 4
+- Sebastian Braune: 6
+- Thomas Bretschneider: 3
+- Thomas Grueneberg: 2
+- Tobias Kahl: 5
+- Torsten Bartel: 5
+- Wolfgang Aleksik: 6
+<<END PLAYER RANKS>>
+
+------------------------------------------------------------
+RANK RULES
+- Singles Rank Window (HARD): for players A,B in singles, |rank[A] − rank[B]| ≤ 2, else violation `singles_rank_window`.
+- Doubles Balance (SOFT/advisory): with ranks sorted r1 ≤ r2 ≤ r3 ≤ r4, flag `doubles_unbalanced_advisory` if neither:
+  (a) Similar quartet: r4 − r1 ≤ 2, nor
+  (b) Two-strong vs two-weak: (r2 − r1 ≤ 1) AND (r4 − r3 ≤ 1) AND (r3 − r2 ≥ 2).
+
+------------------------------------------------------------
+REPAIR ENGINE (do this AFTER first audit, then iterate)
+GENERAL PRINCIPLES
+- Never edit rows in FROZEN WEEKS.
+- Prefer swaps and minimal movement across the SAME ISO week to satisfy weekly coverage.
+- Do not delete rows. If unsolvable without breaking a HARD rule → append “(UNREPAIRABLE)” to Spieler and keep the row.
+- Maintain headcount and slot legality at all times.
+- After EACH repair pass, re-run the FULL AUDIT over the entire file.
+
+REPAIR PRIORITY ORDER (apply in this order)
+1) Illegal slot codes / wrong weekday-duration-court → fix to nearest legal slot or flag UNREPAIRABLE if ambiguous.
+2) Headcount wrong (Einzel≠2, Doppel≠4) → adjust by adding/removing legal players.
+3) Monday core slot violations → enforce core roster/exclusions strictly.
+4) Holidays/blackouts (except core exemption) → replace with legal, available players.
+5) Protected player time rules → move/replace to legal times.
+6) One-per-day → de-duplicate a player across same date by swapping with legal alternates.
+7) Weekly coverage (missing/duplicate required slots) → fix within week where possible.
+8) Weekly & season caps → re-balance assignments without breaking earlier HARD rules.
+9) Singles rank window (HARD) → re-pair players; if impossible, flag UNREPAIRABLE.
+10) Doubles balance (SOFT) → improve if possible without affecting HARD constraints.
+
+TIEBREAKERS (deterministic)
+- Prefer replacements from players already available that week and allowed by weekday availability.
+- For Monday core rotation, cycle through {Frank, Lars, Peter} to equalize appearances.
+- When multiple legal options exist, choose the alphabetically first surname to keep deterministic output.
+
+ITERATION
+- Perform: AUDIT → REPAIR → AUDIT … until:
+  - No violations remain (other than SOFT advisories), OR
+  - Only rows marked UNREPAIRABLE remain, OR
+  - 10 passes reached (then stop and report remaining violations).
+
+------------------------------------------------------------
+OUTPUT (at the very end, after convergence)
+A) Sanity Summary (compact JSON integers):
+   - headcount_errors; illegal_slot_codes; starts_after_20_00; wed_doubles_not_20_00;
+   - protected_time_violations; womens_singles; mixed_singles;
+   - weekday_conflicts; holiday_conflicts;
+   - only_doubles_in_singles; only_singles_in_doubles;
+   - weekly_cap_violations; season_cap_violations;
+   - overlaps_same_day; dirk_rules_violations;
+   - mon_pla_mohamad; mon_pla_woman; mon_pla_core;
+   - missing_required_weekly_slots;
+   - kerstin_target {player, planned_total, target=6, shortfall};
+   - singles_rank_window;
+   - doubles_unbalanced_advisory.
+
+B) Violations table (+ downloadable CSV):
+   Columns: Datum | Tag | Slot | Typ | Spieler | Betroffene/r | Regel | Details
+   - Include “0 violations” if none.
+   - Rows flagged UNREPAIRABLE must appear here with explanation.
+
+C) Per-player weekly usage & caps (+ CSV):
+   Spieler | Jahr | KW | Matches_in_KW | Cap | Over_Cap(Yes/No)
+
+D) Helpful tables (optional):
+   - Singles roster; Doubles roster; Players with >1 appearance on same date; Kerstin target check.
+   - Advisory list of `doubles_unbalanced_advisory` with player ranks.
+
+E) Corrected Plan (CSV):
+   - Same layout/columns as input. 
+   - For UNREPAIRABLE items, append “(UNREPAIRABLE)” to Spieler.
+
+PARSING WARNINGS
+- Report unreadable slot codes, unknown names, inconsistent date formats, unknown ranks.
+
+IMPORTANT
+- Do NOT modify the uploaded file in place — create a new corrected CSV.
+- Use ONLY this prompt + the uploaded plan.
+- All date logic uses ISO weeks.
