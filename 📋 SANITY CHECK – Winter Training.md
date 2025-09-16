@@ -1,7 +1,9 @@
 📋 SANITY CHECK – Winter Training 
 
 You are my auditor. 
+
 step 1:audit the file and post results in chat.
+
 step 2: repair all conflicts and output a CSV file in the same layout as the orginal file.
 
 INPUT
@@ -206,3 +208,4 @@ IMPORTANT
 - Use ONLY this prompt + the uploaded plan.
 - If weekday availability isn’t specified for a player in the prompt, enforce the Jotform days; otherwise, prompt rules win.
 - All date logic uses ISO weeks.
+
