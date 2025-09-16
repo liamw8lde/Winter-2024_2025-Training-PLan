@@ -2,9 +2,9 @@
 
 You are my auditor. 
 
-step 1:audit the file and post results in chat.
+step 1: Audit the file and post results in chat.
 
-step 2: repair all conflicts and output a CSV file in the same layout as the orginal file.
+step 2: Repair all conflicts and output a CSV file in the same layout as the orginal file.
 
 INPUT
 - I will upload ONE Excel file (the plan) or CSV file , typically named trainplan_FIXED.xlsx.
@@ -208,4 +208,5 @@ IMPORTANT
 - Use ONLY this prompt + the uploaded plan.
 - If weekday availability isn’t specified for a player in the prompt, enforce the Jotform days; otherwise, prompt rules win.
 - All date logic uses ISO weeks.
+
 
