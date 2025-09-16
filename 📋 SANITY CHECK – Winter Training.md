@@ -202,8 +202,7 @@ PARSING WARNINGS
 - Report unreadable slot codes, unknown names, inconsistent date formats.
 
 IMPORTANT
-- Do NOT modify the Excel — report only.
+- Do NOT modify the uploaded file — check for conflicts then create new CSV file in the same format.
 - Use ONLY this prompt + the uploaded plan.
 - If weekday availability isn’t specified for a player in the prompt, enforce the Jotform days; otherwise, prompt rules win.
-- Monday PLA: only the core four get weekday/holiday exemption (not caps).
 - All date logic uses ISO weeks.
