@@ -87,7 +87,9 @@ def render_week_view(df, year, week):
 
 # Datenquelle: bevorzugt winter_training.csv, sonst alte CSV, sonst Upload
 st.sidebar.header("📄 Datenquelle")
-candidates = ["/mnt/data/winter_training.csv", "/mnt/data/Datum,Tag,Slot,Typ,Spieler.csv"]
+candidates = [
+    "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/winter_training.csv"
+]
 existing = [p for p in candidates if Path(p).exists()]
 default_path = existing[0] if existing else "/mnt/data/winter_training.csv"
 
@@ -136,3 +138,4 @@ with tab2:
         st.dataframe(pf[["Spieler_Name","Datum","Tag","Slot","Typ","Spieler"]], use_container_width=True, hide_index=True)
     else:
         st.info("Bitte Spieler auswählen.")
+
