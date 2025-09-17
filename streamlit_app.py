@@ -1,8 +1,36 @@
 import streamlit as st
 import pandas as pd
 
+# ---------- Simple password gate ----------
+PASSWORD = "TGR2025"
+
+def check_password() -> bool:
+    if "auth_ok" in st.session_state and st.session_state.auth_ok:
+        return True
+    with st.sidebar:
+        st.subheader("🔒 Zugang")
+        pw = st.text_input("Passwort eingeben", type="password", help="Hint: TGR + Jahr")
+        if st.button("Login"):
+            if pw == PASSWORD:
+                st.session_state.auth_ok = True
+                st.rerun()
+            else:
+                st.error("Falsches Passwort.")
+    return False
+
 st.set_page_config(page_title="Wochenplan", layout="wide")
 
+# Stop early if not authenticated
+if not check_password():
+    st.stop()
+
+# Optional logout
+with st.sidebar:
+    if st.button("Logout"):
+        st.session_state.clear()
+        st.rerun()
+
+# ---------- Styles ----------
 CUSTOM_CSS = '''<style>
 :root {
   --bg: #0f1117; --panel: #151a23; --muted: #9aa4b2; --text: #e6e9ef;
@@ -24,9 +52,13 @@ small, .muted { color: var(--muted) !important; }
   font-size: 0.75rem; color: var(--accent); }
 .type { font-style: italic; color: var(--text); }
 .players { margin-left: 28px; color: var(--text); }
-.navbar { display:flex; gap:10px; align-items:center; margin:10px 0 6px 0; }
+
+/* Buttons */
+.navbar { display:flex; gap:10px; align-items:center; margin: 10px 0 6px 0; }
 .navbtn > button { background: var(--panel) !important; color: var(--text) !important; border: 1px solid var(--divider) !important; }
 hr { border: none; border-top: 1px solid var(--divider); margin: 16px 0; }
+
+/* Fix streamlit selects/multiselect white-on-white */
 div[data-baseweb="select"] > div { background: var(--panel) !important; color: var(--text) !important; }
 div[data-baseweb="select"] input { color: var(--text) !important; }
 div[data-baseweb="select"] svg { fill: var(--text) !important; }
@@ -34,6 +66,7 @@ div[data-baseweb="select"] div[aria-selected="true"] { background: #0e2215 !impo
 </style>'''
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
+# ---------- Data helpers ----------
 def _postprocess(df: pd.DataFrame):
     expected = ["Datum", "Tag", "Slot", "Typ", "Spieler"]
     missing = [c for c in expected if c not in df.columns]
@@ -87,6 +120,7 @@ def render_week_view(df, year, week):
             st.markdown(f'<div class="match-item">{top}{players_html}</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
+# ---------- Data source (GitHub raw default, upload optional) ----------
 st.sidebar.header("📄 Datenquelle")
 default_path = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/winter_training.csv"
 uploaded = st.sidebar.file_uploader("CSV hochladen (Spalten: Datum, Tag, Slot, Typ, Spieler)", type=["csv"])
@@ -104,6 +138,7 @@ except Exception as e:
 
 st.sidebar.success(f"Quelle: {src}")
 
+# ---------- Tabs ----------
 tab1, tab2 = st.tabs(["📆 Wochenplan", "🧍 Spieler-Matches"])
 
 with tab1:
