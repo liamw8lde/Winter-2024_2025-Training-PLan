@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import re
-from pathlib import Path
 
 st.set_page_config(page_title="Wochenplan", layout="wide")
 
@@ -26,8 +24,13 @@ small, .muted { color: var(--muted) !important; }
   font-size: 0.75rem; color: var(--accent); }
 .type { font-style: italic; color: var(--text); }
 .players { margin-left: 28px; color: var(--text); }
-.back-btn { display: inline-block; padding: 6px 12px; border-radius: 10px; background: var(--panel); color: var(--muted);
-  border: 1px solid var(--divider); text-decoration: none; }
+.navbar { display:flex; gap:10px; align-items:center; margin:10px 0 6px 0; }
+.navbtn > button { background: var(--panel) !important; color: var(--text) !important; border: 1px solid var(--divider) !important; }
+hr { border: none; border-top: 1px solid var(--divider); margin: 16px 0; }
+div[data-baseweb="select"] > div { background: var(--panel) !important; color: var(--text) !important; }
+div[data-baseweb="select"] input { color: var(--text) !important; }
+div[data-baseweb="select"] svg { fill: var(--text) !important; }
+div[data-baseweb="select"] div[aria-selected="true"] { background: #0e2215 !important; color: var(--accent) !important; }
 </style>'''
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
@@ -72,7 +75,6 @@ def render_week_view(df, year, week):
         st.info("Keine Einträge in dieser Woche."); return
     wk = wk.sort_values(["Datum_dt","Startzeit_sort","Slot"])
     st.markdown('<div class="page-title"><h1>Wochenplan</h1></div>', unsafe_allow_html=True)
-    st.markdown('<a class="back-btn">◀︎ Zurück</a>', unsafe_allow_html=True)
     st.markdown(f'<div class="kalenderwoche">Kalenderwoche {int(week)}, {int(year)}</div>', unsafe_allow_html=True)
     for dt, day_df in wk.groupby("Datum_dt"):
         day_str = dt.strftime("%A, %Y-%m-%d")
@@ -85,10 +87,8 @@ def render_week_view(df, year, week):
             st.markdown(f'<div class="match-item">{top}{players_html}</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-# Datenquelle: bevorzugt GitHub-CSV, sonst Upload
 st.sidebar.header("📄 Datenquelle")
 default_path = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/winter_training.csv"
-
 uploaded = st.sidebar.file_uploader("CSV hochladen (Spalten: Datum, Tag, Slot, Typ, Spieler)", type=["csv"])
 use = st.sidebar.radio("Quelle wählen", ["GitHub-Datei", "Upload"], index=0 if uploaded is None else 1)
 
@@ -104,21 +104,30 @@ except Exception as e:
 
 st.sidebar.success(f"Quelle: {src}")
 
-
 tab1, tab2 = st.tabs(["📆 Wochenplan", "🧍 Spieler-Matches"])
 
 with tab1:
-    weeks = (
+    weeks_df = (
         df.dropna(subset=["Datum_dt"])
           .assign(WeekKey=week_key)
           .sort_values(["Jahr","Woche","Datum_dt"])
     )
-    options = weeks["WeekKey"].unique().tolist()
-    if not options:
+    week_keys = weeks_df["WeekKey"].unique().tolist()
+    if not week_keys:
         st.warning("Keine Wochen gefunden.")
     else:
-        sel = st.selectbox("Woche (ISO) auswählen", options=options, index=0)
-        y = int(sel.split("-W")[0]); w = int(sel.split("-W")[1])
+        if "wk_idx" not in st.session_state:
+            st.session_state.wk_idx = 0
+        c1, c2, c3 = st.columns([1,1,8])
+        with c1:
+            if st.button("◀ Woche zurück", use_container_width=True):
+                st.session_state.wk_idx = max(0, st.session_state.wk_idx - 1)
+        with c2:
+            if st.button("Woche vor ▶", use_container_width=True):
+                st.session_state.wk_idx = min(len(week_keys)-1, st.session_state.wk_idx + 1)
+        st.session_state.wk_idx = max(0, min(st.session_state.wk_idx, len(week_keys)-1))
+        sel_key = week_keys[st.session_state.wk_idx]
+        y = int(sel_key.split("-W")[0]); w = int(sel_key.split("-W")[1])
         render_week_view(df, y, w)
 
 with tab2:
@@ -135,5 +144,3 @@ with tab2:
         st.dataframe(pf[["Spieler_Name","Datum","Tag","Slot","Typ","Spieler"]], use_container_width=True, hide_index=True)
     else:
         st.info("Bitte Spieler auswählen.")
-
-
