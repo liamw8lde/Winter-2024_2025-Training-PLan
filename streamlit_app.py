@@ -85,16 +85,12 @@ def render_week_view(df, year, week):
             st.markdown(f'<div class="match-item">{top}{players_html}</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-# Datenquelle: bevorzugt winter_training.csv, sonst alte CSV, sonst Upload
+# Datenquelle: bevorzugt GitHub-CSV, sonst Upload
 st.sidebar.header("📄 Datenquelle")
-candidates = [
-    "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/winter_training.csv"
-]
-existing = [p for p in candidates if Path(p).exists()]
-default_path = existing[0] if existing else "/mnt/data/winter_training.csv"
+default_path = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/winter_training.csv"
 
 uploaded = st.sidebar.file_uploader("CSV hochladen (Spalten: Datum, Tag, Slot, Typ, Spieler)", type=["csv"])
-use = st.sidebar.radio("Quelle wählen", ["Standarddatei", "Upload"], index=0 if uploaded is None else 1)
+use = st.sidebar.radio("Quelle wählen", ["GitHub-Datei", "Upload"], index=0 if uploaded is None else 1)
 
 try:
     if use == "Upload" and uploaded is not None:
@@ -102,11 +98,12 @@ try:
         src = "Upload"
     else:
         df, df_exp = load_csv(default_path)
-        src = f"Standarddatei: {Path(default_path).name}"
+        src = "GitHub-Datei"
 except Exception as e:
     st.error(f"Datenfehler: {e}"); st.stop()
 
 st.sidebar.success(f"Quelle: {src}")
+
 
 tab1, tab2 = st.tabs(["📆 Wochenplan", "🧍 Spieler-Matches"])
 
@@ -138,4 +135,5 @@ with tab2:
         st.dataframe(pf[["Spieler_Name","Datum","Tag","Slot","Typ","Spieler"]], use_container_width=True, hide_index=True)
     else:
         st.info("Bitte Spieler auswählen.")
+
 
