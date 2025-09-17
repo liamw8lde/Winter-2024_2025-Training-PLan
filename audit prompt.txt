@@ -1,11 +1,12 @@
+
 📋 SANITY CHECK – Winter Training (Iterative Audit + Repair)
 
-You are my auditor and repairer. Run a FULL audit, repair all resolvable violations, and RE‑AUDIT repeatedly until the plan is stable (no new violations) or only flagged UNREPAIRABLE items remain. Output everything requested at the end.
+You are my auditor and repairer. Run a FULL audit, repair all resolvable violations, and RE‑AUDIT repeatedly until the plan is stable (no new violations) or only flagged UNREPAIRABLE items remain. Repeat up to 100 passes if necessary.
 
 PARAMETERS (read first)
 - INPUT FILE: One Excel/CSV file (the plan). Use ONLY this file + the rules below. No external data.
 - FROZEN WEEKS (optional): If I provide ISO weeks to freeze (e.g., {year:2025, weeks:[38]}), do NOT modify matches that occur in those ISO weeks; still AUDIT them and report violations.
-- STABILITY: After every repair pass you MUST re-run the full audit. Repeat until stable or max 10 passes.
+- STABILITY: After every repair pass you MUST re-run the full audit. Repeat until stable or max 100 passes.
 - PRIORITY: HARD rules must be satisfied before any SOFT advisories. If a conflict cannot be solved without breaking another HARD rule, mark as UNREPAIRABLE (do not delete the row).
 
 ------------------------------------------------------------
@@ -21,7 +22,7 @@ HOW TO PARSE THE PLAN
 6) Normalize player names to a canonical set (trim, collapse spaces, unify ß/ss, umlauts, and case).
 
 ------------------------------------------------------------
-ALLOWED SLOTS (STRICT)  —  “weekday + code + court + duration” must match exactly
+ALLOWED SLOTS (STRICT) — “weekday + code + court + duration” must match exactly
 - Montag
   - D20:00-120 PLA — Doppel
   - D20:00-120 PLB — Doppel
@@ -51,21 +52,21 @@ PROTECTED PLAYERS (HARD)
 - Frank Petermann → only 19:00 or 20:00 (never 18:00).
 - Matthias Duddek → only 18:00 or 19:00 (never ≥20:00).
 - Dirk Kistner → Mo/Mi/Do only; on Wednesday only 19:00 (never 18:00 or 20:00); max 2/week.
-- Arndt Stüber → only Wednesday 19:00.
-- Thommy/Thomas Grüneberg → start 18:00 or 19:00 70% of the time; 30% Wednesday 20:00.
+- Arndt Stueber → only Wednesday 19:00.
+- Thommy/Thomas Grueneberg → start 18:00 or 19:00 70% of the time; 30% Wednesday 20:00.
 - Jens Hafner → only Wednesday 19:00.
 
 WOMEN & SINGLES (HARD)
-- Women (Anke Ihde, Lena Meiß/Meiss, Martina Schmidt, Kerstin Baarck) must NOT play singles.
+- Women (Anke Ihde, Lena Meiss, Martina Schmidt, Kerstin Baarck) must NOT play singles.
 - Any female in singles = violation `womens_singles` (mixed singles included).
 
 ------------------------------------------------------------
 MONDAY CORE SLOT (HARD) — Montag D20:00–120 PLA
 1) Mandatory Core:
    - Martin Lange and Bjoern Junker must always be present unless on holiday.
-   - The other two players must be chosen ONLY from {Frank Petermann, Lars Staubermann, Peter Plähn}, rotated evenly across the season.
+   - The other two players must be chosen ONLY from {Frank Petermann, Lars Staubermann, Peter Plaehn}, rotated evenly across the season.
 2) Exclusions:
-   - No women ever (except: Lena Meiß allowed ONLY if Liam Wilde is also one of the four).
+   - No women ever (except: Lena Meiss allowed ONLY if Liam Wilde is also one of the four).
    - Mohamad Albadry is NEVER allowed.
    - No other substitutes allowed (e.g., Tobias Kahl, Gunnar Brix, etc.).
 3) Holiday Exception:
@@ -91,6 +92,7 @@ WEEKLY CAPS / SEASON CAPS (HARD unless specified)
 HOLIDAYS / BLACKOUTS (AUTHORITATIVE)
 - Use ONLY the list below for holiday checks (prompt wins on overlap).
 - Monday PLA core exemption: in that slot ONLY, the core four are exempt from holiday checks (caps still apply).
+- Global blackouts: NO matches on **24.12**, **25.12**, **31.12** (any year covered by the plan).
 
 <<START MERGED HOLIDAYS LIST>>
 - Kerstin Baarck: 2025-09-01 → 2025-09-30.
@@ -108,15 +110,15 @@ HOLIDAYS / BLACKOUTS (AUTHORITATIVE)
 - Liam Wilde: 2025-12-24.
 - Matthias Duddek: 2025-11-04 → 2025-11-10; 2025-12-24 → 2025-12-31.
 - Anke Ihde: 2025-09-25.
-- Arndt Stüber: 2025-10-16; 2025-10-31; 2025-11-17; 2025-11-23; 2025-12-15; 2025-12-31.
+- Arndt Stüber/Stueber: 2025-10-16; 2025-10-31; 2025-11-17; 2025-11-23; 2025-12-15; 2025-12-31.
 - Bernd Robioneck: 2025-12-01; 2025-12-08; 2025-12-22; 2026-01-04.
-- Björn Junker: 2025-10-25; 2025-10-31; 2025-12-20; 2025-12-31.
+- Björn/Bjoern Junker: 2025-10-25; 2025-10-31; 2025-12-20; 2025-12-31.
 - Frank Koller: 2025-10-10; 2025-10-31; 2025-12-18; 2026-01-05.
 - Gunnar Brix: 2025-09-26; 2025-10-06; 2025-10-11; 2025-10-20; 2025-10-25; 2025-11-17; 2025-11-22; 2025-12-22; 2025-12-31.
-- Jörg Peters: 2025-12-22; 2026-01-02.
-- Jürgen Hansen: 2025-12-22; 2026-01-04.
-- Kai Schröder: 2025-10-06; 2025-10-12; 2025-12-01; 2025-12-06; 2025-12-22; 2025-12-27.
-- Markus Münch: 2025-10-13; 2025-10-19; 2025-12-22; 2026-01-04.
+- Jörg/Joerg Peters: 2025-12-22; 2026-01-02.
+- Jürgen/Juergen Hansen: 2025-12-22; 2026-01-04.
+- Kai Schröder/Schroeder: 2025-10-06; 2025-10-12; 2025-12-01; 2025-12-06; 2025-12-22; 2025-12-27.
+- Markus Münch/Muench: 2025-10-13; 2025-10-19; 2025-12-22; 2026-01-04.
 - Martin Lange: 2025-12-22; 2026-01-04.
 - Martina Schmidt: 2025-11-08; 2025-11-22; 2026-01-01.
 - Michael Bock: 2025-12-20; 2026-01-04.
@@ -134,10 +136,10 @@ WEEKDAY AVAILABILITY (JOTFORM)
 <<START JOTFORM WEEKDAY AVAILABILITY LIST>>
 - Andreas Dank: Montag, Mittwoch
 - Anke Ihde: Montag, Mittwoch, Donnerstag
-- Arndt Stüber: Mittwoch
+- Arndt Stüber/Stueber: Mittwoch
 - Bernd Robioneck: Mittwoch, Donnerstag
 - Bernd Sotzek: Montag, Mittwoch
-- Björn Junker: Montag
+- Bjoern Junker: Montag
 - Carsten Gambal: Montag, Mittwoch, Donnerstag
 - Dirk Kistner: Montag, Mittwoch, Donnerstag
 - Frank Koller: Mittwoch, Donnerstag
@@ -147,30 +149,30 @@ WEEKDAY AVAILABILITY (JOTFORM)
 - Jan Pappenheim: Montag, Mittwoch, Donnerstag
 - Jens Hafner: Montag, Mittwoch
 - Jens Krause: Mittwoch
-- Jörg Peters: Mittwoch
-- Jürgen Hansen: Mittwoch
-- Kai Schröder: Mittwoch
+- Joerg/Jörg Peters: Mittwoch
+- Juergen/Jürgen Hansen: Mittwoch
+- Kai Schroeder/Schröder: Mittwoch
 - Karsten Usinger: Mittwoch, Donnerstag
 - Kerstin Baarck: Montag, Donnerstag
 - Lars Staubermann: Montag, Donnerstag
-- Lena Meiß: Montag, Donnerstag
+- Lena Meiss/Meiß: Montag, Donnerstag
 - Liam Wilde: Montag, Donnerstag
 - Lorenz Kramp: Montag, Mittwoch
 - Manfred Grell: Mittwoch, Donnerstag
-- Markus Münch: Mittwoch, Sonntag
+- Markus Muench/Münch: Mittwoch, Sonntag
 - Martin Lange: Montag
 - Martina Schmidt: Montag, Mittwoch, Donnerstag
 - Matthias Duddek: Montag, Mittwoch, Donnerstag
 - Michael Bock: Montag, Mittwoch
 - Michael Rabehl: Montag, Donnerstag
 - Mohamad Albadry: Montag
-- Oliver Böss: Mittwoch, Donnerstag
+- Oliver Boess/Böss: Mittwoch, Donnerstag
 - Patrick Buehrsch: Mittwoch, Donnerstag
-- Peter Plähn: Montag
+- Peter Plaehn/Plähn: Montag
 - Ralf Colditz: Mittwoch
 - Sebastian Braune: Montag, Donnerstag
 - Thomas Bretschneider: Donnerstag
-- Thomas Grüneberg: Mittwoch, Donnerstag
+- Thomas Grueneberg/Grüneberg: Mittwoch, Donnerstag
 - Tobias Kahl: Montag, Mittwoch
 - Torsten Bartel: Montag, Mittwoch, Donnerstag
 - Wolfgang Aleksik: Mittwoch
@@ -183,8 +185,8 @@ PLAYER RANKS (AUTHORITATIVE)
 <<START PLAYER RANKS>>
 - Andreas Dank: 5
 - Anke Ihde: 6
-- Arndt Stueber: 5
-- Bernd Robioneck: 5
+- Arndt Stueber: 4
+- Bernd Robioneck: 4
 - Bernd Sotzek: 3
 - Bjoern Junker: 1
 - Carsten Gambal: 4
@@ -199,11 +201,11 @@ PLAYER RANKS (AUTHORITATIVE)
 - Joerg Peters: 2
 - Juergen Hansen: 3
 - Kai Schroeder: 4
-- Karsten Usinger: 3
+- Karsten Usinger: 5
 - Kerstin Baarck: 6
 - Lars Staubermann: 2
 - Lena Meiss: 6
-- Liam Wilde: 3
+- Liam Wilde: 2
 - Lorenz Kramp: 4
 - Manfred Grell: 4
 - Markus Muench: 5
@@ -218,7 +220,7 @@ PLAYER RANKS (AUTHORITATIVE)
 - Peter Plaehn: 2
 - Ralf Colditz: 4
 - Sebastian Braune: 6
-- Thomas Bretschneider: 3
+- Thomas Bretschneider: 2
 - Thomas Grueneberg: 2
 - Tobias Kahl: 5
 - Torsten Bartel: 5
@@ -262,7 +264,7 @@ ITERATION
 - Perform: AUDIT → REPAIR → AUDIT … until:
   - No violations remain (other than SOFT advisories), OR
   - Only rows marked UNREPAIRABLE remain, OR
-  - 10 passes reached (then stop and report remaining violations).
+  - Max passes reached (100).
 
 ------------------------------------------------------------
 OUTPUT (at the very end, after convergence)
