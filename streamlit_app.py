@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 
 # Basic config
-st.set_page_config(page_title="Wochenplan")  # default layout & theme
+st.set_page_config(page_title="Wochenplan", layout="wide", initial_sidebar_state="collapsed")
+
 
 CSV_URL = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/winter_training.csv"
 
@@ -107,3 +108,4 @@ with tab2:
         st.dataframe(pf[["Spieler_Name", "Datum", "Tag", "Slot", "Typ", "Spieler"]], use_container_width=True)
     else:
         st.info("Bitte Spieler auswählen.")
+
