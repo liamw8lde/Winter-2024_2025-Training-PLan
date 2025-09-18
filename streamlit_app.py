@@ -1,34 +1,48 @@
 import streamlit as st
 import pandas as pd
 
-# ---------- Simple password gate ----------
+# ---------- Config ----------
+st.set_page_config(page_title="Wochenplan", layout="wide")
 PASSWORD = "TGR2025"
+DEFAULT_CSV_URL = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/winter_training.csv"
 
+# ---------- Password gate in MAIN WINDOW ----------
 def check_password() -> bool:
-    if "auth_ok" in st.session_state and st.session_state.auth_ok:
+    if st.session_state.get("auth_ok", False):
         return True
-    with st.sidebar:
-        st.subheader("🔒 Zugang")
-        pw = st.text_input("Passwort eingeben", type="password", help="Hint: TGR + Jahr")
-        if st.button("Login"):
-            if pw == PASSWORD:
-                st.session_state.auth_ok = True
-                st.rerun()
-            else:
-                st.error("Falsches Passwort.")
+
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.markdown(
+            """
+            <div style="
+                background:#151a23;
+                border:1px solid #242c36;
+                border-radius:14px;
+                padding:24px 22px;
+            ">
+              <h2 style="margin-top:0; color:#e6e9ef;">🔒 Zugang erforderlich</h2>
+              <p style="color:#9aa4b2; margin-bottom:14px">
+                Bitte Passwort eingeben, um den Trainingsplan zu sehen.
+              </p>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.form("login_form", clear_on_submit=False):
+            pw = st.text_input("Passwort", type="password")
+            ok = st.form_submit_button("Login")
+            if ok:
+                if pw == PASSWORD:
+                    st.session_state.auth_ok = True
+                    st.rerun()
+                else:
+                    st.error("Falsches Passwort.")
+        st.markdown("</div>", unsafe_allow_html=True)
     return False
 
-st.set_page_config(page_title="Wochenplan", layout="wide")
-
-# Stop early if not authenticated
 if not check_password():
     st.stop()
-
-# Optional logout
-with st.sidebar:
-    if st.button("Logout"):
-        st.session_state.clear()
-        st.rerun()
 
 # ---------- Styles ----------
 CUSTOM_CSS = '''<style>
@@ -39,7 +53,7 @@ CUSTOM_CSS = '''<style>
 [class^="stAppViewContainer"] { background: var(--bg); }
 h1,h2,h3,h4,h5,h6, p, li, span, div, label { color: var(--text); }
 small, .muted { color: var(--muted) !important; }
-.page-title { margin: 10px 0 8px 0; }
+.page-title { margin: 10px 0 8px 0; display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .kalenderwoche { font-size: 1.4rem; font-weight: 700; margin-top: 2px; }
 .day-block { background: transparent; padding: 8px 0 18px 0; border-bottom: 1px solid var(--divider); }
 .day-title { font-weight: 700; font-size: 1.1rem; margin: 12px 0 12px 0; }
@@ -52,13 +66,8 @@ small, .muted { color: var(--muted) !important; }
   font-size: 0.75rem; color: var(--accent); }
 .type { font-style: italic; color: var(--text); }
 .players { margin-left: 28px; color: var(--text); }
-
-/* Buttons */
-.navbar { display:flex; gap:10px; align-items:center; margin: 10px 0 6px 0; }
-.navbtn > button { background: var(--panel) !important; color: var(--text) !important; border: 1px solid var(--divider) !important; }
-hr { border: none; border-top: 1px solid var(--divider); margin: 16px 0; }
-
-/* Fix streamlit selects/multiselect white-on-white */
+.source-pill { font-size: 12px; color: var(--muted); }
+.logout > button { background:#151a23 !important; border:1px solid var(--divider) !important; }
 div[data-baseweb="select"] > div { background: var(--panel) !important; color: var(--text) !important; }
 div[data-baseweb="select"] input { color: var(--text) !important; }
 div[data-baseweb="select"] svg { fill: var(--text) !important; }
@@ -107,7 +116,9 @@ def render_week_view(df, year, week):
     if wk.empty:
         st.info("Keine Einträge in dieser Woche."); return
     wk = wk.sort_values(["Datum_dt","Startzeit_sort","Slot"])
-    st.markdown('<div class="page-title"><h1>Wochenplan</h1></div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-title"><h1>Wochenplan'
+                f' <span class="source-pill">• Quelle: GitHub (read-only)</span></h1>'
+                '</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="kalenderwoche">Kalenderwoche {int(week)}, {int(year)}</div>', unsafe_allow_html=True)
     for dt, day_df in wk.groupby("Datum_dt"):
         day_str = dt.strftime("%A, %Y-%m-%d")
@@ -120,23 +131,21 @@ def render_week_view(df, year, week):
             st.markdown(f'<div class="match-item">{top}{players_html}</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-# ---------- Data source (GitHub raw default, upload optional) ----------
-st.sidebar.header("📄 Datenquelle")
-default_path = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/winter_training.csv"
-uploaded = st.sidebar.file_uploader("CSV hochladen (Spalten: Datum, Tag, Slot, Typ, Spieler)", type=["csv"])
-use = st.sidebar.radio("Quelle wählen", ["GitHub-Datei", "Upload"], index=0 if uploaded is None else 1)
-
+# ---------- Load data from GitHub (no sidebar, no upload) ----------
 try:
-    if use == "Upload" and uploaded is not None:
-        df, df_exp = load_csv(uploaded)
-        src = "Upload"
-    else:
-        df, df_exp = load_csv(default_path)
-        src = "GitHub-Datei"
+    df, df_exp = load_csv(DEFAULT_CSV_URL)
 except Exception as e:
-    st.error(f"Datenfehler: {e}"); st.stop()
+    st.error(f"Datenfehler beim Laden der GitHub-CSV: {e}")
+    st.stop()
 
-st.sidebar.success(f"Quelle: {src}")
+# ---------- Header with Logout ----------
+left, right = st.columns([8,1])
+with left:
+    st.write("")  # spacer
+with right:
+    if st.button("Logout", key="logout_btn"):
+        st.session_state.clear()
+        st.rerun()
 
 # ---------- Tabs ----------
 tab1, tab2 = st.tabs(["📆 Wochenplan", "🧍 Spieler-Matches"])
