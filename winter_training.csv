@@ -1,134 +1,133 @@
-
-Datum,Tag,Slot,Typ,Spieler,players,slot_parsed,start_hour
-2025-09-15,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Frank Petermann, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Frank Petermann', 'Lars Staubermann']","('D', '20', '00', '120', 'A')",20
-2025-09-15,Montag,D20:00-120 PLB,Doppel,"Liam Wilde, Mohamad Albadry, Michael Bock, Andreas Dank","['Liam Wilde', 'Mohamad Albadry', 'Michael Bock', 'Andreas Dank']","('D', '20', '00', '120', 'B')",20
-2025-09-17,Mittwoch,D20:00-90 PLA,Doppel,"Wolfgang Aleksik, Joerg Peters, Thomas Grueneberg, Jens Krause","['Wolfgang Aleksik', 'Joerg Peters', 'Thomas Grueneberg', 'Jens Krause']","('D', '20', '00', '90', 'A')",20
-2025-09-17,Mittwoch,D20:00-90 PLB,Doppel,"Bernd Robioneck, Carsten Gambal, Frank Koller, Lorenz Kramp","['Bernd Robioneck', 'Carsten Gambal', 'Frank Koller', 'Lorenz Kramp']","('D', '20', '00', '90', 'B')",20
-2025-09-17,Mittwoch,E18:00-60 PLA,Einzel,"Juergen Hansen, Patrick Buehrsch","['Juergen Hansen', 'Patrick Buehrsch']","('E', '18', '00', '60', 'A')",18
-2025-09-17,Mittwoch,E19:00-60 PLA,Einzel,"Markus Muench, Dirk Kistner","['Markus Muench', 'Dirk Kistner']","('E', '19', '00', '60', 'A')",19
-2025-09-17,Mittwoch,E19:00-60 PLB,Einzel,"Arndt Stueber, Kai Schroeder","['Arndt Stueber', 'Kai Schroeder']","('E', '19', '00', '60', 'B')",19
-2025-09-18,Donnerstag,E20:00-90 PLA,Einzel,"Bernd Robioneck, Thomas Bretschneider","['Bernd Robioneck', 'Thomas Bretschneider']","('E', '20', '00', '90', 'A')",20
-2025-09-18,Donnerstag,E20:00-90 PLB,Einzel,"Frank Koller, Manfred Grell","['Frank Koller', 'Manfred Grell']","('E', '20', '00', '90', 'B')",20
-2025-09-22,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Frank Petermann, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Frank Petermann', 'Lars Staubermann']","('D', '20', '00', '120', 'A')",20
-2025-09-22,Montag,D20:00-120 PLB,Doppel,"Sebastian Braune, Mohamad Albadry, Jan Pappenheim, Andreas Dank","['Sebastian Braune', 'Mohamad Albadry', 'Jan Pappenheim', 'Andreas Dank']","('D', '20', '00', '120', 'B')",20
-2025-09-24,Mittwoch,D20:00-90 PLA,Doppel,"Thomas Grueneberg, Martina Schmidt, Anke Ihde, Jan Pappenheim","['Thomas Grueneberg', 'Martina Schmidt', 'Anke Ihde', 'Jan Pappenheim']","('D', '20', '00', '90', 'A')",20
-2025-09-24,Mittwoch,D20:00-90 PLB,Doppel,"Juergen Hansen, Joerg Peters, Lorenz Kramp, Manfred Grell","['Juergen Hansen', 'Joerg Peters', 'Lorenz Kramp', 'Manfred Grell']","('D', '20', '00', '90', 'B')",20
-2025-09-24,Mittwoch,E18:00-60 PLA,Einzel,"Matthias Duddek, Patrick Buehrsch","['Matthias Duddek', 'Patrick Buehrsch']","('E', '18', '00', '60', 'A')",18
-2025-09-24,Mittwoch,E19:00-60 PLA,Einzel,"Kai Schroeder, Dirk Kistner","['Kai Schroeder', 'Dirk Kistner']","('E', '19', '00', '60', 'A')",19
-2025-09-24,Mittwoch,E19:00-60 PLB,Einzel,"Arndt Stueber, Markus Muench","['Arndt Stueber', 'Markus Muench']","('E', '19', '00', '60', 'B')",19
-2025-09-25,Donnerstag,E20:00-90 PLA,Einzel,"Bernd Robioneck, Sebastian Braune","['Bernd Robioneck', 'Sebastian Braune']","('E', '20', '00', '90', 'A')",20
-2025-09-25,Donnerstag,E20:00-90 PLB,Einzel,"Michael Rabehl, Carsten Gambal","['Michael Rabehl', 'Carsten Gambal']","('E', '20', '00', '90', 'B')",20
-2025-09-29,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Lars Staubermann']","('D', '20', '00', '120', 'A')",20
-2025-09-29,Montag,D20:00-120 PLB,Doppel,"Mohamad Albadry, Michael Bock, Lena Meiss, Andreas Dank","['Mohamad Albadry', 'Michael Bock', 'Lena Meiss', 'Andreas Dank']","('D', '20', '00', '120', 'B')",20
-2025-10-01,Mittwoch,D20:00-90 PLA,Doppel,"Thomas Grueneberg, Gunnar Brix, Markus Muench, Lorenz Kramp","['Thomas Grueneberg', 'Gunnar Brix', 'Markus Muench', 'Lorenz Kramp']","('D', '20', '00', '90', 'A')",20
-2025-10-01,Mittwoch,D20:00-90 PLB,Doppel,"Juergen Hansen, Anke Ihde, Martina Schmidt, Joerg Peters","['Juergen Hansen', 'Anke Ihde', 'Martina Schmidt', 'Joerg Peters']","('D', '20', '00', '90', 'B')",20
-2025-10-01,Mittwoch,E18:00-60 PLA,Einzel,"Patrick Buehrsch, Oliver Boess","['Patrick Buehrsch', 'Oliver Boess']","('E', '18', '00', '60', 'A')",18
-2025-10-01,Mittwoch,E19:00-60 PLA,Einzel,"Jens Hafner, Dirk Kistner","['Jens Hafner', 'Dirk Kistner']","('E', '19', '00', '60', 'A')",19
-2025-10-01,Mittwoch,E19:00-60 PLB,Einzel,"Arndt Stueber, Ralf Colditz","['Arndt Stueber', 'Ralf Colditz']","('E', '19', '00', '60', 'B')",19
-2025-10-02,Donnerstag,E20:00-90 PLA,Einzel,"Bernd Robioneck, Frank Koller","['Bernd Robioneck', 'Frank Koller']","('E', '20', '00', '90', 'A')",20
-2025-10-02,Donnerstag,E20:00-90 PLB,Einzel,"Gunnar Brix, Michael Rabehl","['Gunnar Brix', 'Michael Rabehl']","('E', '20', '00', '90', 'B')",20
-2025-10-06,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Frank Petermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Frank Petermann']","('D', '20', '00', '120', 'A')",20
-2025-10-06,Montag,D20:00-120 PLB,Doppel,"Sebastian Braune, Andreas Dank, Anke Ihde, Jan Pappenheim","['Sebastian Braune', 'Andreas Dank', 'Anke Ihde', 'Jan Pappenheim']","('D', '20', '00', '120', 'B')",20
-2025-10-08,Mittwoch,D20:00-90 PLA,Doppel,"Bernd Robioneck, Ralf Colditz, Michael Bock, Andreas Dank","['Bernd Robioneck', 'Ralf Colditz', 'Michael Bock', 'Andreas Dank']","('D', '20', '00', '90', 'A')",20
-2025-10-08,Mittwoch,D20:00-90 PLB,Doppel,"Martina Schmidt, Jan Pappenheim, Thomas Grueneberg, Markus Muench","['Martina Schmidt', 'Jan Pappenheim', 'Thomas Grueneberg', 'Markus Muench']","('D', '20', '00', '90', 'B')",20
-2025-10-08,Mittwoch,E18:00-60 PLA,Einzel,"Patrick Buehrsch, Joerg Peters","['Patrick Buehrsch', 'Joerg Peters']","('E', '18', '00', '60', 'A')",18
-2025-10-08,Mittwoch,E19:00-60 PLA,Einzel,"Manfred Grell, Dirk Kistner","['Manfred Grell', 'Dirk Kistner']","('E', '19', '00', '60', 'A')",19
-2025-10-08,Mittwoch,E19:00-60 PLB,Einzel,"Arndt Stueber, Matthias Duddek","['Arndt Stueber', 'Matthias Duddek']","('E', '19', '00', '60', 'B')",19
-2025-10-09,Donnerstag,E20:00-90 PLA,Einzel,"Oliver Boess, Manfred Grell","['Oliver Boess', 'Manfred Grell']","('E', '20', '00', '90', 'A')",20
-2025-10-09,Donnerstag,E20:00-90 PLB,Einzel,"Thomas Bretschneider, Frank Koller","['Thomas Bretschneider', 'Frank Koller']","('E', '20', '00', '90', 'B')",20
-2025-10-13,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Liam Wilde","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Liam Wilde']","('D', '20', '00', '120', 'A')",20
-2025-10-13,Montag,D20:00-120 PLB,Doppel,"Carsten Gambal, Jan Pappenheim, Mohamad Albadry, Tobias Kahl","['Carsten Gambal', 'Jan Pappenheim', 'Mohamad Albadry', 'Tobias Kahl']","('D', '20', '00', '120', 'B')",20
-2025-10-15,Mittwoch,D20:00-90 PLA,Doppel,"Thomas Grueneberg, Juergen Hansen, Joerg Peters, Michael Bock","['Thomas Grueneberg', 'Juergen Hansen', 'Joerg Peters', 'Michael Bock']","('D', '20', '00', '90', 'A')",20
-2025-10-15,Mittwoch,D20:00-90 PLB,Doppel,"Gunnar Brix, Martina Schmidt, Jan Pappenheim, Wolfgang Aleksik","['Gunnar Brix', 'Martina Schmidt', 'Jan Pappenheim', 'Wolfgang Aleksik']","('D', '20', '00', '90', 'B')",20
-2025-10-15,Mittwoch,E18:00-60 PLA,Einzel,"Patrick Buehrsch, Matthias Duddek","['Patrick Buehrsch', 'Matthias Duddek']","('E', '18', '00', '60', 'A')",18
-2025-10-15,Mittwoch,E19:00-60 PLA,Einzel,"Ralf Colditz, Dirk Kistner","['Ralf Colditz', 'Dirk Kistner']","('E', '19', '00', '60', 'A')",19
-2025-10-15,Mittwoch,E19:00-60 PLB,Einzel,"Kai Schroeder, Heiko Thomsen","['Kai Schroeder', 'Heiko Thomsen']","('E', '19', '00', '60', 'B')",19
-2025-10-16,Donnerstag,E20:00-90 PLA,Einzel,"Thomas Bretschneider, Oliver Boess","['Thomas Bretschneider', 'Oliver Boess']","('E', '20', '00', '90', 'A')",20
-2025-10-16,Donnerstag,E20:00-90 PLB,Einzel,"Bernd Robioneck, Gunnar Brix","['Bernd Robioneck', 'Gunnar Brix']","('E', '20', '00', '90', 'B')",20
-2025-10-20,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Liam Wilde","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Liam Wilde']","('D', '20', '00', '120', 'A')",20
-2025-10-20,Montag,D20:00-120 PLB,Doppel,"Martina Schmidt, Carsten Gambal, Jan Pappenheim, Andreas Dank","['Martina Schmidt', 'Carsten Gambal', 'Jan Pappenheim', 'Andreas Dank']","('D', '20', '00', '120', 'B')",20
-2025-10-22,Mittwoch,D20:00-90 PLA,Doppel,"Juergen Hansen, Andreas Dank, Jan Pappenheim, Anke Ihde","['Juergen Hansen', 'Andreas Dank', 'Jan Pappenheim', 'Anke Ihde']","('D', '20', '00', '90', 'A')",20
-2025-10-22,Mittwoch,D20:00-90 PLB,Doppel,"Joerg Peters, Bernd Robioneck, Michael Bock, Wolfgang Aleksik","['Joerg Peters', 'Bernd Robioneck', 'Michael Bock', 'Wolfgang Aleksik']","('D', '20', '00', '90', 'B')",20
-2025-10-22,Mittwoch,E18:00-60 PLA,Einzel,"Carsten Gambal, Heiko Thomsen","['Carsten Gambal', 'Heiko Thomsen']","('E', '18', '00', '60', 'A')",18
-2025-10-22,Mittwoch,E19:00-60 PLA,Einzel,"Ralf Colditz, Dirk Kistner","['Ralf Colditz', 'Dirk Kistner']","('E', '19', '00', '60', 'A')",19
-2025-10-22,Mittwoch,E19:00-60 PLB,Einzel,"Markus Muench, Kai Schroeder","['Markus Muench', 'Kai Schroeder']","('E', '19', '00', '60', 'B')",19
-2025-10-23,Donnerstag,E20:00-90 PLA,Einzel,"Liam Wilde, Oliver Boess","['Liam Wilde', 'Oliver Boess']","('E', '20', '00', '90', 'A')",20
-2025-10-23,Donnerstag,E20:00-90 PLB,Einzel,"Manfred Grell, Carsten Gambal","['Manfred Grell', 'Carsten Gambal']","('E', '20', '00', '90', 'B')",20
-2025-10-27,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Peter Plaehn, Frank Petermann, Lars Staubermann","['Martin Lange', 'Peter Plaehn', 'Frank Petermann', 'Lars Staubermann']","('D', '20', '00', '120', 'A')",20
-2025-10-27,Montag,D20:00-120 PLB,Doppel,"Anke Ihde, Mohamad Albadry, Lorenz Kramp, Michael Rabehl","['Anke Ihde', 'Mohamad Albadry', 'Lorenz Kramp', 'Michael Rabehl']","('D', '20', '00', '120', 'B')",20
-2025-10-29,Mittwoch,D20:00-90 PLA,Doppel,"Bernd Robioneck, Juergen Hansen, Lorenz Kramp, Michael Bock","['Bernd Robioneck', 'Juergen Hansen', 'Lorenz Kramp', 'Michael Bock']","('D', '20', '00', '90', 'A')",20
-2025-10-29,Mittwoch,D20:00-90 PLB,Doppel,"Markus Muench, Gunnar Brix, Andreas Dank, Carsten Gambal","['Markus Muench', 'Gunnar Brix', 'Andreas Dank', 'Carsten Gambal']","('D', '20', '00', '90', 'B')",20
-2025-10-29,Mittwoch,E18:00-60 PLA,Einzel,"Oliver Boess, Patrick Buehrsch","['Oliver Boess', 'Patrick Buehrsch']","('E', '18', '00', '60', 'A')",18
-2025-10-29,Mittwoch,E19:00-60 PLA,Einzel,"Joerg Peters, Frank Petermann","['Joerg Peters', 'Frank Petermann']","('E', '19', '00', '60', 'A')",19
-2025-10-29,Mittwoch,E19:00-60 PLB,Einzel,"Matthias Duddek, Kai Schroeder","['Matthias Duddek', 'Kai Schroeder']","('E', '19', '00', '60', 'B')",19
-2025-10-30,Donnerstag,E20:00-90 PLA,Einzel,"Bernd Robioneck, Thomas Bretschneider","['Bernd Robioneck', 'Thomas Bretschneider']","('E', '20', '00', '90', 'A')",20
-2025-10-30,Donnerstag,E20:00-90 PLB,Einzel,"Liam Wilde, Oliver Boess","['Liam Wilde', 'Oliver Boess']","('E', '20', '00', '90', 'B')",20
-2025-11-03,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Lars Staubermann']","('D', '20', '00', '120', 'A')",20
-2025-11-03,Montag,D20:00-120 PLB,Doppel,"Sebastian Braune, Anke Ihde, Lena Meiss, Kerstin Baarck","['Sebastian Braune', 'Anke Ihde', 'Lena Meiss', 'Kerstin Baarck']","('D', '20', '00', '120', 'B')",20
-2025-11-05,Mittwoch,D20:00-90 PLA,Doppel,"Joerg Peters, Anke Ihde, Gunnar Brix, Thomas Grueneberg","['Joerg Peters', 'Anke Ihde', 'Gunnar Brix', 'Thomas Grueneberg']","('D', '20', '00', '90', 'A')",20
-2025-11-05,Mittwoch,D20:00-90 PLB,Doppel,"Wolfgang Aleksik, Karsten Usinger, Martina Schmidt, Heiko Thomsen","['Wolfgang Aleksik', 'Karsten Usinger', 'Martina Schmidt', 'Heiko Thomsen']","('D', '20', '00', '90', 'B')",20
-2025-11-05,Mittwoch,E18:00-60 PLA,Einzel,"Ralf Colditz, Tobias Kahl","['Ralf Colditz', 'Tobias Kahl']","('E', '18', '00', '60', 'A')",18
-2025-11-05,Mittwoch,E19:00-60 PLA,Einzel,"Frank Koller, Dirk Kistner","['Frank Koller', 'Dirk Kistner']","('E', '19', '00', '60', 'A')",19
-2025-11-05,Mittwoch,E19:00-60 PLB,Einzel,"Arndt Stueber, Kai Schroeder","['Arndt Stueber', 'Kai Schroeder']","('E', '19', '00', '60', 'B')",19
-2025-11-06,Donnerstag,E20:00-90 PLA,Einzel,"Michael Rabehl, Bernd Robioneck","['Michael Rabehl', 'Bernd Robioneck']","('E', '20', '00', '90', 'A')",20
-2025-11-06,Donnerstag,E20:00-90 PLB,Einzel,"Thomas Bretschneider, Liam Wilde","['Thomas Bretschneider', 'Liam Wilde']","('E', '20', '00', '90', 'B')",20
-2025-11-10,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Frank Petermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Frank Petermann']","('D', '20', '00', '120', 'A')",20
-2025-11-10,Montag,D20:00-120 PLB,Doppel,"Mohamad Albadry, Kerstin Baarck, Tobias Kahl, Andreas Dank","['Mohamad Albadry', 'Kerstin Baarck', 'Tobias Kahl', 'Andreas Dank']","('D', '20', '00', '120', 'B')",20
-2025-11-12,Mittwoch,D20:00-90 PLA,Doppel,"Kai Schroeder, Juergen Hansen, Markus Muench, Bernd Robioneck","['Kai Schroeder', 'Juergen Hansen', 'Markus Muench', 'Bernd Robioneck']","('D', '20', '00', '90', 'A')",20
-2025-11-12,Mittwoch,D20:00-90 PLB,Doppel,"Karsten Usinger, Ralf Colditz, Michael Bock, Wolfgang Aleksik","['Karsten Usinger', 'Ralf Colditz', 'Michael Bock', 'Wolfgang Aleksik']","('D', '20', '00', '90', 'B')",20
-2025-11-12,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Frank Koller","['Thomas Grueneberg', 'Frank Koller']","('E', '18', '00', '60', 'A')",18
-2025-11-12,Mittwoch,E19:00-60 PLA,Einzel,"Oliver Boess, Dirk Kistner","['Oliver Boess', 'Dirk Kistner']","('E', '19', '00', '60', 'A')",19
-2025-11-12,Mittwoch,E19:00-60 PLB,Einzel,"Arndt Stueber, Manfred Grell","['Arndt Stueber', 'Manfred Grell']","('E', '19', '00', '60', 'B')",19
-2025-11-13,Donnerstag,E20:00-90 PLA,Einzel,"Sebastian Braune, Michael Rabehl","['Sebastian Braune', 'Michael Rabehl']","('E', '20', '00', '90', 'A')",20
-2025-11-13,Donnerstag,E20:00-90 PLB,Einzel,"Thomas Bretschneider, Oliver Boess","['Thomas Bretschneider', 'Oliver Boess']","('E', '20', '00', '90', 'B')",20
-2025-11-17,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Frank Petermann, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Frank Petermann', 'Lars Staubermann']","('D', '20', '00', '120', 'A')",20
-2025-11-17,Montag,D20:00-120 PLB,Doppel,"Mohamad Albadry, Sebastian Braune, Lena Meiss, Andreas Dank","['Mohamad Albadry', 'Sebastian Braune', 'Lena Meiss', 'Andreas Dank']","('D', '20', '00', '120', 'B')",20
-2025-11-19,Mittwoch,D20:00-90 PLA,Doppel,"Juergen Hansen, Manfred Grell, Karsten Usinger, Joerg Peters","['Juergen Hansen', 'Manfred Grell', 'Karsten Usinger', 'Joerg Peters']","('D', '20', '00', '90', 'A')",20
-2025-11-19,Mittwoch,D20:00-90 PLB,Doppel,"Tobias Kahl, Michael Bock, Markus Muench, Kai Schroeder","['Tobias Kahl', 'Michael Bock', 'Markus Muench', 'Kai Schroeder']","('D', '20', '00', '90', 'B')",20
-2025-11-19,Mittwoch,E18:00-60 PLA,Einzel,"Frank Koller, Heiko Thomsen","['Frank Koller', 'Heiko Thomsen']","('E', '18', '00', '60', 'A')",18
-2025-11-19,Mittwoch,E19:00-60 PLA,Einzel,"Lorenz Kramp, Dirk Kistner","['Lorenz Kramp', 'Dirk Kistner']","('E', '19', '00', '60', 'A')",19
-2025-11-19,Mittwoch,E19:00-60 PLB,Einzel,"Matthias Duddek, Thomas Grueneberg","['Matthias Duddek', 'Thomas Grueneberg']","('E', '19', '00', '60', 'B')",19
-2025-11-20,Donnerstag,E20:00-90 PLA,Einzel,"Manfred Grell, Liam Wilde","['Manfred Grell', 'Liam Wilde']","('E', '20', '00', '90', 'A')",20
-2025-11-20,Donnerstag,E20:00-90 PLB,Einzel,"Frank Petermann, Oliver Boess","['Frank Petermann', 'Oliver Boess']","('E', '20', '00', '90', 'B')",20
-2025-11-24,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Lars Staubermann']","('D', '20', '00', '120', 'A')",20
-2025-11-24,Montag,D20:00-120 PLB,Doppel,"Carsten Gambal, Anke Ihde, Michael Rabehl, Martina Schmidt","['Carsten Gambal', 'Anke Ihde', 'Michael Rabehl', 'Martina Schmidt']","('D', '20', '00', '120', 'B')",20
-2025-11-26,Mittwoch,D20:00-90 PLA,Doppel,"Carsten Gambal, Tobias Kahl, Jan Pappenheim, Wolfgang Aleksik","['Carsten Gambal', 'Tobias Kahl', 'Jan Pappenheim', 'Wolfgang Aleksik']","('D', '20', '00', '90', 'A')",20
-2025-11-26,Mittwoch,D20:00-90 PLB,Doppel,"Ralf Colditz, Karsten Usinger, Gunnar Brix, Anke Ihde","['Ralf Colditz', 'Karsten Usinger', 'Gunnar Brix', 'Anke Ihde']","('D', '20', '00', '90', 'B')",20
-2025-11-26,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Heiko Thomsen","['Thomas Grueneberg', 'Heiko Thomsen']","('E', '18', '00', '60', 'A')",18
-2025-11-26,Mittwoch,E19:00-60 PLA,Einzel,"Matthias Duddek, Dirk Kistner","['Matthias Duddek', 'Dirk Kistner']","('E', '19', '00', '60', 'A')",19
-2025-11-26,Mittwoch,E19:00-60 PLB,Einzel,"Frank Koller, Lorenz Kramp","['Frank Koller', 'Lorenz Kramp']","('E', '19', '00', '60', 'B')",19
-2025-11-27,Donnerstag,E20:00-90 PLA,Einzel,"Sebastian Braune, Michael Rabehl","['Sebastian Braune', 'Michael Rabehl']","('E', '20', '00', '90', 'A')",20
-2025-11-27,Donnerstag,E20:00-90 PLB,Einzel,"Thomas Bretschneider, Oliver Boess","['Thomas Bretschneider', 'Oliver Boess']","('E', '20', '00', '90', 'B')",20
-2025-12-01,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Lars Staubermann']","('D', '20', '00', '120', 'A')",20
-2025-12-01,Montag,D20:00-120 PLB,Doppel,"Tobias Kahl, Carsten Gambal, Gunnar Brix, Lena Meiss","['Tobias Kahl', 'Carsten Gambal', 'Gunnar Brix', 'Lena Meiss']","('D', '20', '00', '120', 'B')",20
-2025-12-03,Mittwoch,D20:00-90 PLA,Doppel,"Manfred Grell, Markus Muench, Lorenz Kramp, Ralf Colditz","['Manfred Grell', 'Markus Muench', 'Lorenz Kramp', 'Ralf Colditz']","('D', '20', '00', '90', 'A')",20
-2025-12-03,Mittwoch,D20:00-90 PLB,Doppel,"Martina Schmidt, Juergen Hansen, Joerg Peters, Michael Bock","['Martina Schmidt', 'Juergen Hansen', 'Joerg Peters', 'Michael Bock']","('D', '20', '00', '90', 'B')",20
-2025-12-03,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Patrick Buehrsch","['Thomas Grueneberg', 'Patrick Buehrsch']","('E', '18', '00', '60', 'A')",18
-2025-12-03,Mittwoch,E19:00-60 PLA,Einzel,"Karsten Usinger, Dirk Kistner","['Karsten Usinger', 'Dirk Kistner']","('E', '19', '00', '60', 'A')",19
-2025-12-03,Mittwoch,E19:00-60 PLB,Einzel,"Jens Hafner, Arndt Stueber","['Jens Hafner', 'Arndt Stueber']","('E', '19', '00', '60', 'B')",19
-2025-12-04,Donnerstag,E20:00-90 PLA,Einzel,"Manfred Grell, Liam Wilde","['Manfred Grell', 'Liam Wilde']","('E', '20', '00', '90', 'A')",20
-2025-12-04,Donnerstag,E20:00-90 PLB,Einzel,"Thomas Bretschneider, Frank Koller","['Thomas Bretschneider', 'Frank Koller']","('E', '20', '00', '90', 'B')",20
-2025-12-08,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Frank Petermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Frank Petermann']","('D', '20', '00', '120', 'A')",20
-2025-12-08,Montag,D20:00-120 PLB,Doppel,"Carsten Gambal, Anke Ihde, Michael Rabehl, Martina Schmidt","['Carsten Gambal', 'Anke Ihde', 'Michael Rabehl', 'Martina Schmidt']","('D', '20', '00', '120', 'B')",20
-2025-12-10,Mittwoch,D20:00-90 PLA,Doppel,"Bernd Robioneck, Gunnar Brix, Ralf Colditz, Wolfgang Aleksik","['Bernd Robioneck', 'Gunnar Brix', 'Ralf Colditz', 'Wolfgang Aleksik']","('D', '20', '00', '90', 'A')",20
-2025-12-10,Mittwoch,D20:00-90 PLB,Doppel,"Karsten Usinger, Juergen Hansen, Jan Pappenheim, Lorenz Kramp","['Karsten Usinger', 'Juergen Hansen', 'Jan Pappenheim', 'Lorenz Kramp']","('D', '20', '00', '90', 'B')",20
-2025-12-10,Mittwoch,E18:00-60 PLA,Einzel,"Tobias Kahl, Heiko Thomsen","['Tobias Kahl', 'Heiko Thomsen']","('E', '18', '00', '60', 'A')",18
-2025-12-10,Mittwoch,E19:00-60 PLA,Einzel,"Matthias Duddek, Dirk Kistner","['Matthias Duddek', 'Dirk Kistner']","('E', '19', '00', '60', 'A')",19
-2025-12-10,Mittwoch,E19:00-60 PLB,Einzel,"Manfred Grell, Oliver Boess","['Manfred Grell', 'Oliver Boess']","('E', '19', '00', '60', 'B')",19
-2025-12-11,Donnerstag,E20:00-90 PLA,Einzel,"Frank Koller, Karsten Usinger","['Frank Koller', 'Karsten Usinger']","('E', '20', '00', '90', 'A')",20
-2025-12-11,Donnerstag,E20:00-90 PLB,Einzel,"Manfred Grell, Liam Wilde","['Manfred Grell', 'Liam Wilde']","('E', '20', '00', '90', 'B')",20
-2025-12-15,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Lars Staubermann']","('D', '20', '00', '120', 'A')",20
-2025-12-15,Montag,D20:00-120 PLB,Doppel,"Kerstin Baarck, Sebastian Braune, Lena Meiss, Andreas Dank","['Kerstin Baarck', 'Sebastian Braune', 'Lena Meiss', 'Andreas Dank']","('D', '20', '00', '120', 'B')",20
-2025-12-17,Mittwoch,D20:00-90 PLA,Doppel,"Joerg Peters, Karsten Usinger, Markus Muench, Bernd Robioneck","['Joerg Peters', 'Karsten Usinger', 'Markus Muench', 'Bernd Robioneck']","('D', '20', '00', '90', 'A')",20
-2025-12-17,Mittwoch,D20:00-90 PLB,Doppel,"Gunnar Brix, Juergen Hansen, Ralf Colditz, Michael Bock","['Gunnar Brix', 'Juergen Hansen', 'Ralf Colditz', 'Michael Bock']","('D', '20', '00', '90', 'B')",20
-2025-12-17,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Patrick Buehrsch","['Thomas Grueneberg', 'Patrick Buehrsch']","('E', '18', '00', '60', 'A')",18
-2025-12-17,Mittwoch,E19:00-60 PLA,Einzel,"Matthias Duddek, Dirk Kistner","['Matthias Duddek', 'Dirk Kistner']","('E', '19', '00', '60', 'A')",19
-2025-12-17,Mittwoch,E19:00-60 PLB,Einzel,"Kai Schroeder, Lorenz Kramp","['Kai Schroeder', 'Lorenz Kramp']","('E', '19', '00', '60', 'B')",19
-2025-12-18,Donnerstag,E20:00-90 PLA,Einzel,"Sebastian Braune, Jan Pappenheim","['Sebastian Braune', 'Jan Pappenheim']","('E', '20', '00', '90', 'A')",20
-2025-12-18,Donnerstag,E20:00-90 PLB,Einzel,"Liam Wilde, Thomas Bretschneider","['Liam Wilde', 'Thomas Bretschneider']","('E', '20', '00', '90', 'B')",20
-2025-12-22,Montag,D20:00-120 PLA,Doppel,"Peter Plaehn, Frank Petermann, Lars Staubermann, Liam Wilde","['Peter Plaehn', 'Frank Petermann', 'Lars Staubermann', 'Liam Wilde']","('D', '20', '00', '120', 'A')",20
-2025-12-22,Montag,D20:00-120 PLB,Doppel,"Carsten Gambal, Anke Ihde, Michael Rabehl, Martina Schmidt","['Carsten Gambal', 'Anke Ihde', 'Michael Rabehl', 'Martina Schmidt']","('D', '20', '00', '120', 'B')",20
-2025-12-29,Montag,D20:00-120 PLA,Doppel,"Peter Plaehn, Frank Petermann, Lars Staubermann, Liam Wilde","['Peter Plaehn', 'Frank Petermann', 'Lars Staubermann', 'Liam Wilde']","('D', '20', '00', '120', 'A')",20
-2025-12-29,Montag,D20:00-120 PLB,Doppel,"Mohamad Albadry, Anke Ihde, Michael Rabehl, Andreas Dank","['Mohamad Albadry', 'Anke Ihde', 'Michael Rabehl', 'Andreas Dank']","('D', '20', '00', '120', 'B')",20
-2026-01-01,Donnerstag,E20:00-90 PLA,Einzel,"Frank Petermann, Liam Wilde","['Frank Petermann', 'Liam Wilde']","('E', '20', '00', '90', 'A')",20
-2026-01-01,Donnerstag,E20:00-90 PLB,Einzel,"Karsten Usinger, Oliver Boess","['Karsten Usinger', 'Oliver Boess']","('E', '20', '00', '90', 'B')",20
+Datum,Tag,Slot,Typ,Spieler,players
+2025-09-15,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Frank Petermann, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Frank Petermann', 'Lars Staubermann']"
+2025-09-15,Montag,D20:00-120 PLB,Doppel,"Liam Wilde, Mohamad Albadry, Michael Bock, Andreas Dank","['Liam Wilde', 'Mohamad Albadry', 'Michael Bock', 'Andreas Dank']"
+2025-09-17,Mittwoch,D20:00-90 PLA,Doppel,"Wolfgang Aleksik, Joerg Peters, Thomas Grueneberg, Jens Krause","['Wolfgang Aleksik', 'Joerg Peters', 'Thomas Grueneberg', 'Jens Krause']"
+2025-09-17,Mittwoch,D20:00-90 PLB,Doppel,"Bernd Robioneck, Carsten Gambal, Frank Koller, Lorenz Kramp","['Bernd Robioneck', 'Carsten Gambal', 'Frank Koller', 'Lorenz Kramp']"
+2025-09-17,Mittwoch,E18:00-60 PLA,Einzel,"Juergen Hansen, Patrick Buehrsch","['Juergen Hansen', 'Patrick Buehrsch']"
+2025-09-17,Mittwoch,E19:00-60 PLA,Einzel,"Markus Muench, Dirk Kistner","['Markus Muench', 'Dirk Kistner']"
+2025-09-17,Mittwoch,E19:00-60 PLB,Einzel,"Arndt Stueber, Kai Schroeder","['Arndt Stueber', 'Kai Schroeder']"
+2025-09-18,Donnerstag,E20:00-90 PLA,Einzel,"Bernd Robioneck, Thomas Bretschneider","['Bernd Robioneck', 'Thomas Bretschneider']"
+2025-09-18,Donnerstag,E20:00-90 PLB,Einzel,"Frank Koller, Manfred Grell","['Frank Koller', 'Manfred Grell']"
+2025-09-22,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Frank Petermann, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Frank Petermann', 'Lars Staubermann']"
+2025-09-22,Montag,D20:00-120 PLB,Doppel,"Sebastian Braune, Mohamad Albadry, Jan Pappenheim, Andreas Dank","['Sebastian Braune', 'Mohamad Albadry', 'Jan Pappenheim', 'Andreas Dank']"
+2025-09-24,Mittwoch,D20:00-90 PLA,Doppel,"Thomas Grueneberg, Martina Schmidt, Anke Ihde, Jan Pappenheim","['Thomas Grueneberg', 'Martina Schmidt', 'Anke Ihde', 'Jan Pappenheim']"
+2025-09-24,Mittwoch,D20:00-90 PLB,Doppel,"Juergen Hansen, Joerg Peters, Lorenz Kramp, Manfred Grell","['Juergen Hansen', 'Joerg Peters', 'Lorenz Kramp', 'Manfred Grell']"
+2025-09-24,Mittwoch,E18:00-60 PLA,Einzel,"Matthias Duddek, Patrick Buehrsch","['Matthias Duddek', 'Patrick Buehrsch']"
+2025-09-24,Mittwoch,E19:00-60 PLA,Einzel,"Kai Schroeder, Dirk Kistner","['Kai Schroeder', 'Dirk Kistner']"
+2025-09-24,Mittwoch,E19:00-60 PLB,Einzel,"Arndt Stueber, Markus Muench","['Arndt Stueber', 'Markus Muench']"
+2025-09-25,Donnerstag,E20:00-90 PLA,Einzel,"Bernd Robioneck, Sebastian Braune","['Bernd Robioneck', 'Sebastian Braune']"
+2025-09-25,Donnerstag,E20:00-90 PLB,Einzel,"Michael Rabehl, Carsten Gambal","['Michael Rabehl', 'Carsten Gambal']"
+2025-09-29,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Lars Staubermann']"
+2025-09-29,Montag,D20:00-120 PLB,Doppel,"Mohamad Albadry, Michael Bock, Lena Meiss, Andreas Dank","['Mohamad Albadry', 'Michael Bock', 'Lena Meiss', 'Andreas Dank']"
+2025-10-01,Mittwoch,D20:00-90 PLA,Doppel,"Thomas Grueneberg, Gunnar Brix, Markus Muench, Lorenz Kramp","['Thomas Grueneberg', 'Gunnar Brix', 'Markus Muench', 'Lorenz Kramp']"
+2025-10-01,Mittwoch,D20:00-90 PLB,Doppel,"Juergen Hansen, Anke Ihde, Martina Schmidt, Joerg Peters","['Juergen Hansen', 'Anke Ihde', 'Martina Schmidt', 'Joerg Peters']"
+2025-10-01,Mittwoch,E18:00-60 PLA,Einzel,"Patrick Buehrsch, Oliver Boess","['Patrick Buehrsch', 'Oliver Boess']"
+2025-10-01,Mittwoch,E19:00-60 PLA,Einzel,"Jens Hafner, Dirk Kistner","['Jens Hafner', 'Dirk Kistner']"
+2025-10-01,Mittwoch,E19:00-60 PLB,Einzel,"Arndt Stueber, Ralf Colditz","['Arndt Stueber', 'Ralf Colditz']"
+2025-10-02,Donnerstag,E20:00-90 PLA,Einzel,"Bernd Robioneck, Frank Koller","['Bernd Robioneck', 'Frank Koller']"
+2025-10-02,Donnerstag,E20:00-90 PLB,Einzel,"Gunnar Brix, Michael Rabehl","['Gunnar Brix', 'Michael Rabehl']"
+2025-10-06,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Frank Petermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Frank Petermann']"
+2025-10-06,Montag,D20:00-120 PLB,Doppel,"Sebastian Braune, Andreas Dank, Anke Ihde, Jan Pappenheim","['Sebastian Braune', 'Andreas Dank', 'Anke Ihde', 'Jan Pappenheim']"
+2025-10-08,Mittwoch,D20:00-90 PLA,Doppel,"Bernd Robioneck, Ralf Colditz, Michael Bock, Andreas Dank","['Bernd Robioneck', 'Ralf Colditz', 'Michael Bock', 'Andreas Dank']"
+2025-10-08,Mittwoch,D20:00-90 PLB,Doppel,"Martina Schmidt, Jan Pappenheim, Thomas Grueneberg, Markus Muench","['Martina Schmidt', 'Jan Pappenheim', 'Thomas Grueneberg', 'Markus Muench']"
+2025-10-08,Mittwoch,E18:00-60 PLA,Einzel,"Patrick Buehrsch, Joerg Peters","['Patrick Buehrsch', 'Joerg Peters']"
+2025-10-08,Mittwoch,E19:00-60 PLA,Einzel,"Manfred Grell, Dirk Kistner","['Manfred Grell', 'Dirk Kistner']"
+2025-10-08,Mittwoch,E19:00-60 PLB,Einzel,"Arndt Stueber, Matthias Duddek","['Arndt Stueber', 'Matthias Duddek']"
+2025-10-09,Donnerstag,E20:00-90 PLA,Einzel,"Oliver Boess, Manfred Grell","['Oliver Boess', 'Manfred Grell']"
+2025-10-09,Donnerstag,E20:00-90 PLB,Einzel,"Thomas Bretschneider, Frank Koller","['Thomas Bretschneider', 'Frank Koller']"
+2025-10-13,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Liam Wilde","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Liam Wilde']"
+2025-10-13,Montag,D20:00-120 PLB,Doppel,"Carsten Gambal, Jan Pappenheim, Mohamad Albadry, Tobias Kahl","['Carsten Gambal', 'Jan Pappenheim', 'Mohamad Albadry', 'Tobias Kahl']"
+2025-10-15,Mittwoch,D20:00-90 PLA,Doppel,"Thomas Grueneberg, Juergen Hansen, Joerg Peters, Michael Bock","['Thomas Grueneberg', 'Juergen Hansen', 'Joerg Peters', 'Michael Bock']"
+2025-10-15,Mittwoch,D20:00-90 PLB,Doppel,"Gunnar Brix, Martina Schmidt, Jan Pappenheim, Wolfgang Aleksik","['Gunnar Brix', 'Martina Schmidt', 'Jan Pappenheim', 'Wolfgang Aleksik']"
+2025-10-15,Mittwoch,E18:00-60 PLA,Einzel,"Patrick Buehrsch, Matthias Duddek","['Patrick Buehrsch', 'Matthias Duddek']"
+2025-10-15,Mittwoch,E19:00-60 PLA,Einzel,"Ralf Colditz, Dirk Kistner","['Ralf Colditz', 'Dirk Kistner']"
+2025-10-15,Mittwoch,E19:00-60 PLB,Einzel,"Kai Schroeder, Heiko Thomsen","['Kai Schroeder', 'Heiko Thomsen']"
+2025-10-16,Donnerstag,E20:00-90 PLA,Einzel,"Thomas Bretschneider, Oliver Boess","['Thomas Bretschneider', 'Oliver Boess']"
+2025-10-16,Donnerstag,E20:00-90 PLB,Einzel,"Bernd Robioneck, Gunnar Brix","['Bernd Robioneck', 'Gunnar Brix']"
+2025-10-20,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Liam Wilde","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Liam Wilde']"
+2025-10-20,Montag,D20:00-120 PLB,Doppel,"Martina Schmidt, Carsten Gambal, Jan Pappenheim, Andreas Dank","['Martina Schmidt', 'Carsten Gambal', 'Jan Pappenheim', 'Andreas Dank']"
+2025-10-22,Mittwoch,D20:00-90 PLA,Doppel,"Juergen Hansen, Andreas Dank, Jan Pappenheim, Anke Ihde","['Juergen Hansen', 'Andreas Dank', 'Jan Pappenheim', 'Anke Ihde']"
+2025-10-22,Mittwoch,D20:00-90 PLB,Doppel,"Joerg Peters, Bernd Robioneck, Michael Bock, Wolfgang Aleksik","['Joerg Peters', 'Bernd Robioneck', 'Michael Bock', 'Wolfgang Aleksik']"
+2025-10-22,Mittwoch,E18:00-60 PLA,Einzel,"Carsten Gambal, Heiko Thomsen","['Carsten Gambal', 'Heiko Thomsen']"
+2025-10-22,Mittwoch,E19:00-60 PLA,Einzel,"Ralf Colditz, Dirk Kistner","['Ralf Colditz', 'Dirk Kistner']"
+2025-10-22,Mittwoch,E19:00-60 PLB,Einzel,"Markus Muench, Kai Schroeder","['Markus Muench', 'Kai Schroeder']"
+2025-10-23,Donnerstag,E20:00-90 PLA,Einzel,"Liam Wilde, Oliver Boess","['Liam Wilde', 'Oliver Boess']"
+2025-10-23,Donnerstag,E20:00-90 PLB,Einzel,"Manfred Grell, Carsten Gambal","['Manfred Grell', 'Carsten Gambal']"
+2025-10-27,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Peter Plaehn, Frank Petermann, Lars Staubermann","['Martin Lange', 'Peter Plaehn', 'Frank Petermann', 'Lars Staubermann']"
+2025-10-27,Montag,D20:00-120 PLB,Doppel,"Anke Ihde, Mohamad Albadry, Lorenz Kramp, Michael Rabehl","['Anke Ihde', 'Mohamad Albadry', 'Lorenz Kramp', 'Michael Rabehl']"
+2025-10-29,Mittwoch,D20:00-90 PLA,Doppel,"Bernd Robioneck, Juergen Hansen, Lorenz Kramp, Michael Bock","['Bernd Robioneck', 'Juergen Hansen', 'Lorenz Kramp', 'Michael Bock']"
+2025-10-29,Mittwoch,D20:00-90 PLB,Doppel,"Markus Muench, Gunnar Brix, Andreas Dank, Carsten Gambal","['Markus Muench', 'Gunnar Brix', 'Andreas Dank', 'Carsten Gambal']"
+2025-10-29,Mittwoch,E18:00-60 PLA,Einzel,"Oliver Boess, Patrick Buehrsch","['Oliver Boess', 'Patrick Buehrsch']"
+2025-10-29,Mittwoch,E19:00-60 PLA,Einzel,"Joerg Peters, Frank Petermann","['Joerg Peters', 'Frank Petermann']"
+2025-10-29,Mittwoch,E19:00-60 PLB,Einzel,"Matthias Duddek, Kai Schroeder","['Matthias Duddek', 'Kai Schroeder']"
+2025-10-30,Donnerstag,E20:00-90 PLA,Einzel,"Bernd Robioneck, Thomas Bretschneider","['Bernd Robioneck', 'Thomas Bretschneider']"
+2025-10-30,Donnerstag,E20:00-90 PLB,Einzel,"Liam Wilde, Oliver Boess","['Liam Wilde', 'Oliver Boess']"
+2025-11-03,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Lars Staubermann']"
+2025-11-03,Montag,D20:00-120 PLB,Doppel,"Sebastian Braune, Anke Ihde, Lena Meiss, Kerstin Baarck","['Sebastian Braune', 'Anke Ihde', 'Lena Meiss', 'Kerstin Baarck']"
+2025-11-05,Mittwoch,D20:00-90 PLA,Doppel,"Joerg Peters, Anke Ihde, Gunnar Brix, Thomas Grueneberg","['Joerg Peters', 'Anke Ihde', 'Gunnar Brix', 'Thomas Grueneberg']"
+2025-11-05,Mittwoch,D20:00-90 PLB,Doppel,"Wolfgang Aleksik, Karsten Usinger, Martina Schmidt, Heiko Thomsen","['Wolfgang Aleksik', 'Karsten Usinger', 'Martina Schmidt', 'Heiko Thomsen']"
+2025-11-05,Mittwoch,E18:00-60 PLA,Einzel,"Ralf Colditz, Tobias Kahl","['Ralf Colditz', 'Tobias Kahl']"
+2025-11-05,Mittwoch,E19:00-60 PLA,Einzel,"Frank Koller, Dirk Kistner","['Frank Koller', 'Dirk Kistner']"
+2025-11-05,Mittwoch,E19:00-60 PLB,Einzel,"Arndt Stueber, Kai Schroeder","['Arndt Stueber', 'Kai Schroeder']"
+2025-11-06,Donnerstag,E20:00-90 PLA,Einzel,"Michael Rabehl, Bernd Robioneck","['Michael Rabehl', 'Bernd Robioneck']"
+2025-11-06,Donnerstag,E20:00-90 PLB,Einzel,"Thomas Bretschneider, Liam Wilde","['Thomas Bretschneider', 'Liam Wilde']"
+2025-11-10,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Frank Petermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Frank Petermann']"
+2025-11-10,Montag,D20:00-120 PLB,Doppel,"Mohamad Albadry, Kerstin Baarck, Tobias Kahl, Andreas Dank","['Mohamad Albadry', 'Kerstin Baarck', 'Tobias Kahl', 'Andreas Dank']"
+2025-11-12,Mittwoch,D20:00-90 PLA,Doppel,"Kai Schroeder, Juergen Hansen, Markus Muench, Bernd Robioneck","['Kai Schroeder', 'Juergen Hansen', 'Markus Muench', 'Bernd Robioneck']"
+2025-11-12,Mittwoch,D20:00-90 PLB,Doppel,"Karsten Usinger, Ralf Colditz, Michael Bock, Wolfgang Aleksik","['Karsten Usinger', 'Ralf Colditz', 'Michael Bock', 'Wolfgang Aleksik']"
+2025-11-12,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Frank Koller","['Thomas Grueneberg', 'Frank Koller']"
+2025-11-12,Mittwoch,E19:00-60 PLA,Einzel,"Oliver Boess, Dirk Kistner","['Oliver Boess', 'Dirk Kistner']"
+2025-11-12,Mittwoch,E19:00-60 PLB,Einzel,"Arndt Stueber, Manfred Grell","['Arndt Stueber', 'Manfred Grell']"
+2025-11-13,Donnerstag,E20:00-90 PLA,Einzel,"Sebastian Braune, Michael Rabehl","['Sebastian Braune', 'Michael Rabehl']"
+2025-11-13,Donnerstag,E20:00-90 PLB,Einzel,"Thomas Bretschneider, Oliver Boess","['Thomas Bretschneider', 'Oliver Boess']"
+2025-11-17,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Frank Petermann, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Frank Petermann', 'Lars Staubermann']"
+2025-11-17,Montag,D20:00-120 PLB,Doppel,"Mohamad Albadry, Sebastian Braune, Lena Meiss, Andreas Dank","['Mohamad Albadry', 'Sebastian Braune', 'Lena Meiss', 'Andreas Dank']"
+2025-11-19,Mittwoch,D20:00-90 PLA,Doppel,"Juergen Hansen, Manfred Grell, Karsten Usinger, Joerg Peters","['Juergen Hansen', 'Manfred Grell', 'Karsten Usinger', 'Joerg Peters']"
+2025-11-19,Mittwoch,D20:00-90 PLB,Doppel,"Tobias Kahl, Michael Bock, Markus Muench, Kai Schroeder","['Tobias Kahl', 'Michael Bock', 'Markus Muench', 'Kai Schroeder']"
+2025-11-19,Mittwoch,E18:00-60 PLA,Einzel,"Frank Koller, Heiko Thomsen","['Frank Koller', 'Heiko Thomsen']"
+2025-11-19,Mittwoch,E19:00-60 PLA,Einzel,"Lorenz Kramp, Dirk Kistner","['Lorenz Kramp', 'Dirk Kistner']"
+2025-11-19,Mittwoch,E19:00-60 PLB,Einzel,"Matthias Duddek, Thomas Grueneberg","['Matthias Duddek', 'Thomas Grueneberg']"
+2025-11-20,Donnerstag,E20:00-90 PLA,Einzel,"Manfred Grell, Liam Wilde","['Manfred Grell', 'Liam Wilde']"
+2025-11-20,Donnerstag,E20:00-90 PLB,Einzel,"Frank Petermann, Oliver Boess","['Frank Petermann', 'Oliver Boess']"
+2025-11-24,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Lars Staubermann']"
+2025-11-24,Montag,D20:00-120 PLB,Doppel,"Carsten Gambal, Anke Ihde, Michael Rabehl, Martina Schmidt","['Carsten Gambal', 'Anke Ihde', 'Michael Rabehl', 'Martina Schmidt']"
+2025-11-26,Mittwoch,D20:00-90 PLA,Doppel,"Carsten Gambal, Tobias Kahl, Jan Pappenheim, Wolfgang Aleksik","['Carsten Gambal', 'Tobias Kahl', 'Jan Pappenheim', 'Wolfgang Aleksik']"
+2025-11-26,Mittwoch,D20:00-90 PLB,Doppel,"Ralf Colditz, Karsten Usinger, Gunnar Brix, Anke Ihde","['Ralf Colditz', 'Karsten Usinger', 'Gunnar Brix', 'Anke Ihde']"
+2025-11-26,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Heiko Thomsen","['Thomas Grueneberg', 'Heiko Thomsen']"
+2025-11-26,Mittwoch,E19:00-60 PLA,Einzel,"Matthias Duddek, Dirk Kistner","['Matthias Duddek', 'Dirk Kistner']"
+2025-11-26,Mittwoch,E19:00-60 PLB,Einzel,"Frank Koller, Lorenz Kramp","['Frank Koller', 'Lorenz Kramp']"
+2025-11-27,Donnerstag,E20:00-90 PLA,Einzel,"Sebastian Braune, Michael Rabehl","['Sebastian Braune', 'Michael Rabehl']"
+2025-11-27,Donnerstag,E20:00-90 PLB,Einzel,"Thomas Bretschneider, Oliver Boess","['Thomas Bretschneider', 'Oliver Boess']"
+2025-12-01,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Lars Staubermann']"
+2025-12-01,Montag,D20:00-120 PLB,Doppel,"Tobias Kahl, Carsten Gambal, Gunnar Brix, Lena Meiss","['Tobias Kahl', 'Carsten Gambal', 'Gunnar Brix', 'Lena Meiss']"
+2025-12-03,Mittwoch,D20:00-90 PLA,Doppel,"Manfred Grell, Markus Muench, Lorenz Kramp, Ralf Colditz","['Manfred Grell', 'Markus Muench', 'Lorenz Kramp', 'Ralf Colditz']"
+2025-12-03,Mittwoch,D20:00-90 PLB,Doppel,"Martina Schmidt, Juergen Hansen, Joerg Peters, Michael Bock","['Martina Schmidt', 'Juergen Hansen', 'Joerg Peters', 'Michael Bock']"
+2025-12-03,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Patrick Buehrsch","['Thomas Grueneberg', 'Patrick Buehrsch']"
+2025-12-03,Mittwoch,E19:00-60 PLA,Einzel,"Karsten Usinger, Dirk Kistner","['Karsten Usinger', 'Dirk Kistner']"
+2025-12-03,Mittwoch,E19:00-60 PLB,Einzel,"Jens Hafner, Arndt Stueber","['Jens Hafner', 'Arndt Stueber']"
+2025-12-04,Donnerstag,E20:00-90 PLA,Einzel,"Manfred Grell, Liam Wilde","['Manfred Grell', 'Liam Wilde']"
+2025-12-04,Donnerstag,E20:00-90 PLB,Einzel,"Thomas Bretschneider, Frank Koller","['Thomas Bretschneider', 'Frank Koller']"
+2025-12-08,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Frank Petermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Frank Petermann']"
+2025-12-08,Montag,D20:00-120 PLB,Doppel,"Carsten Gambal, Anke Ihde, Michael Rabehl, Martina Schmidt","['Carsten Gambal', 'Anke Ihde', 'Michael Rabehl', 'Martina Schmidt']"
+2025-12-10,Mittwoch,D20:00-90 PLA,Doppel,"Bernd Robioneck, Gunnar Brix, Ralf Colditz, Wolfgang Aleksik","['Bernd Robioneck', 'Gunnar Brix', 'Ralf Colditz', 'Wolfgang Aleksik']"
+2025-12-10,Mittwoch,D20:00-90 PLB,Doppel,"Karsten Usinger, Juergen Hansen, Jan Pappenheim, Lorenz Kramp","['Karsten Usinger', 'Juergen Hansen', 'Jan Pappenheim', 'Lorenz Kramp']"
+2025-12-10,Mittwoch,E18:00-60 PLA,Einzel,"Tobias Kahl, Heiko Thomsen","['Tobias Kahl', 'Heiko Thomsen']"
+2025-12-10,Mittwoch,E19:00-60 PLA,Einzel,"Matthias Duddek, Dirk Kistner","['Matthias Duddek', 'Dirk Kistner']"
+2025-12-10,Mittwoch,E19:00-60 PLB,Einzel,"Manfred Grell, Oliver Boess","['Manfred Grell', 'Oliver Boess']"
+2025-12-11,Donnerstag,E20:00-90 PLA,Einzel,"Frank Koller, Karsten Usinger","['Frank Koller', 'Karsten Usinger']"
+2025-12-11,Donnerstag,E20:00-90 PLB,Einzel,"Manfred Grell, Liam Wilde","['Manfred Grell', 'Liam Wilde']"
+2025-12-15,Montag,D20:00-120 PLA,Doppel,"Martin Lange, Bjoern Junker, Peter Plaehn, Lars Staubermann","['Martin Lange', 'Bjoern Junker', 'Peter Plaehn', 'Lars Staubermann']"
+2025-12-15,Montag,D20:00-120 PLB,Doppel,"Kerstin Baarck, Sebastian Braune, Lena Meiss, Andreas Dank","['Kerstin Baarck', 'Sebastian Braune', 'Lena Meiss', 'Andreas Dank']"
+2025-12-17,Mittwoch,D20:00-90 PLA,Doppel,"Joerg Peters, Karsten Usinger, Markus Muench, Bernd Robioneck","['Joerg Peters', 'Karsten Usinger', 'Markus Muench', 'Bernd Robioneck']"
+2025-12-17,Mittwoch,D20:00-90 PLB,Doppel,"Gunnar Brix, Juergen Hansen, Ralf Colditz, Michael Bock","['Gunnar Brix', 'Juergen Hansen', 'Ralf Colditz', 'Michael Bock']"
+2025-12-17,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Patrick Buehrsch","['Thomas Grueneberg', 'Patrick Buehrsch']"
+2025-12-17,Mittwoch,E19:00-60 PLA,Einzel,"Matthias Duddek, Dirk Kistner","['Matthias Duddek', 'Dirk Kistner']"
+2025-12-17,Mittwoch,E19:00-60 PLB,Einzel,"Kai Schroeder, Lorenz Kramp","['Kai Schroeder', 'Lorenz Kramp']"
+2025-12-18,Donnerstag,E20:00-90 PLA,Einzel,"Sebastian Braune, Jan Pappenheim","['Sebastian Braune', 'Jan Pappenheim']"
+2025-12-18,Donnerstag,E20:00-90 PLB,Einzel,"Liam Wilde, Thomas Bretschneider","['Liam Wilde', 'Thomas Bretschneider']"
+2025-12-22,Montag,D20:00-120 PLA,Doppel,"Peter Plaehn, Frank Petermann, Lars Staubermann, Liam Wilde","['Peter Plaehn', 'Frank Petermann', 'Lars Staubermann', 'Liam Wilde']"
+2025-12-22,Montag,D20:00-120 PLB,Doppel,"Carsten Gambal, Anke Ihde, Michael Rabehl, Martina Schmidt","['Carsten Gambal', 'Anke Ihde', 'Michael Rabehl', 'Martina Schmidt']"
+2025-12-29,Montag,D20:00-120 PLA,Doppel,"Peter Plaehn, Frank Petermann, Lars Staubermann, Liam Wilde","['Peter Plaehn', 'Frank Petermann', 'Lars Staubermann', 'Liam Wilde']"
+2025-12-29,Montag,D20:00-120 PLB,Doppel,"Mohamad Albadry, Anke Ihde, Michael Rabehl, Andreas Dank","['Mohamad Albadry', 'Anke Ihde', 'Michael Rabehl', 'Andreas Dank']"
+2026-01-01,Donnerstag,E20:00-90 PLA,Einzel,"Frank Petermann, Liam Wilde","['Frank Petermann', 'Liam Wilde']"
+2026-01-01,Donnerstag,E20:00-90 PLB,Einzel,"Karsten Usinger, Oliver Boess","['Karsten Usinger', 'Oliver Boess']"
