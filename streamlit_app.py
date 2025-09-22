@@ -304,13 +304,18 @@ with tab2:
         st.dataframe(pf[["Spieler_Name", "Datum", "Tag", "Slot", "Typ", "Spieler"]], use_container_width=True)
     else:
         st.info("Bitte Spieler auswählen.")
-
 # ----------------- Plan bearbeiten (protected) -----------------
 def split_players(s: str):
     return [x.strip() for x in str(s).split(",") if str(x).strip()]
 
 def join_players(lst):
     return ", ".join(lst)
+
+def replace_player_in_row(row, old_name, new_name):
+    players = split_players(row["Spieler"])
+    players = [new_name if p == old_name else p for p in players]
+    row["Spieler"] = join_players(players)
+    return row
 
 def swap_players_in_row(row, a_name, b_name):
     players = split_players(row["Spieler"])
@@ -323,130 +328,268 @@ def swap_players_in_row(row, a_name, b_name):
     return row
 
 def check_min_rules_for_row(row, d: date):
-    """
-    Only two checks (HARD):
-      1) holiday / blackout
-      2) weekday availability
-    Return list of violation strings.
-    """
+    """Only two checks (HARD): 1) holiday/blackout  2) weekday availability."""
     v = []
     players = split_players(row["Spieler"])
     tag = str(row["Tag"])
-    # 1) Holiday
     for p in players:
         if is_holiday(p, d):
             v.append(f"{p}: Urlaub/Blackout am {d}.")
-    # 2) Weekday availability
     for p in players:
         days = JOTFORM.get(p)
         if days is not None and tag not in days:
             v.append(f"{p}: laut Jotform nicht verfügbar an {tag}.")
     return v
 
-def check_min_rules_for_swap(df_plan: pd.DataFrame, mask_rows, d: date):
+def check_min_rules_for_mask(df_plan: pd.DataFrame, mask, d: date):
     v = []
-    rows = df_plan[mask_rows]
-    for _, r in rows.iterrows():
+    for _, r in df_plan[mask].iterrows():
         v += [f"{r['Tag']} {r['Slot']}: {msg}" for msg in check_min_rules_for_row(r, d)]
     return sorted(set(v))
+
+def count_week_matches(df_plan: pd.DataFrame, player: str, d: date) -> int:
+    iso = pd.Timestamp(d).isocalendar()
+    y, w = int(iso.year), int(iso.week)
+    week_df = df_plan[(df_plan["Jahr"] == y) & (df_plan["Woche"] == w)]
+    return int(week_df["Spieler"].str.contains(fr"\b{re.escape(player)}\b", regex=True).sum())
+
+def count_season_matches(df_plan: pd.DataFrame, player: str) -> int:
+    return int(df_plan["Spieler"].str.contains(fr"\b{re.escape(player)}\b", regex=True).sum())
+
+def eligible_replacements(df_plan: pd.DataFrame, tag: str, d: date, exclude: set):
+    """
+    All players from dataset who can play that weekday and are not on holiday/blackout,
+    excluding 'exclude'. Returns list of dicts with name + counts for sorting/labels.
+    """
+    # take every unique player ever seen
+    all_players = sorted(
+        p for p in df_exp["Spieler_Name"].dropna().unique().tolist()
+        if str(p).strip()
+    )
+    items = []
+    for name in all_players:
+        if name in exclude:
+            continue
+        days = JOTFORM.get(name)
+        if not days or tag not in days:
+            continue  # must match weekday list
+        if is_holiday(name, d):
+            continue   # must not be on holiday/blackout
+        items.append({
+            "name": name,
+            "week": count_week_matches(df_plan, name, d),
+            "season": count_season_matches(df_plan, name),
+        })
+    # sort by season asc, then week asc, then name
+    items.sort(key=lambda x: (x["season"], x["week"], x["name"]))
+    return items
+
+def blank_first(options):
+    """Prepend a blank option for nicer defaults."""
+    return [""] + list(options)
+
+def label_or_blank(x, when_blank="— bitte wählen —"):
+    return when_blank if (x is None or x == "") else str(x)
 
 # --------------------------- UI ---------------------------
 def check_edit_password() -> bool:
     if st.session_state.get("edit_ok", False):
         return True
-    with st.form("edit_login"):
-        st.write("🔒 Editieren erfordert ein Passwort.")
-        pw = st.text_input("Passwort", type="password")
-        ok = st.form_submit_button("Login")
-        if ok:
-            if pw == EDIT_PASSWORD:
-                st.session_state.edit_ok = True
-                st.rerun()
-            else:
-                st.error("Falsches Passwort.")
-    return False
+    # simple prompt (no form) to avoid rerun lag on mobile
+    st.write("🔒 Editieren erfordert ein Passwort.")
+    pw = st.text_input("Passwort", type="password", key="edit_pw")
+    if st.button("Login", key="edit_login_btn"):
+        if pw == EDIT_PASSWORD:
+            st.session_state.edit_ok = True
+            st.success("Eingeloggt.")
+        else:
+            st.error("Falsches Passwort.")
+    return st.session_state.get("edit_ok", False)
 
 with tab3:
     st.header("Plan bearbeiten – geschützter Bereich")
+
     if not check_edit_password():
         st.stop()
 
+    # Editable working copy
     if "df_edit" not in st.session_state:
         st.session_state.df_edit = df.copy()
-
     df_edit = st.session_state.df_edit
 
-    # Choose day
+    st.info(
+        "Hier kannst du **1) einen Spieler in einem Match ersetzen** oder **2) zwei Spieler zwischen zwei Matches tauschen**.  "
+        "Die App prüft nur **Urlaub/Blackout** und **Wochentags-Verfügbarkeit (Jotform)**. "
+        "Bei erfolgreicher Änderung wird **direkt auf GitHub (main)** gespeichert."
+    )
+
+    # ---------- Common: date selection and day view  ----------
     valid_days = sorted(df_edit["Datum_dt"].dropna().dt.date.unique())
     if not valid_days:
         st.warning("Keine Daten vorhanden."); st.stop()
-    sel_day = st.date_input("Tag auswählen", value=valid_days[-1])
-    day_df = df_edit[df_edit["Datum_dt"].dt.date.eq(sel_day)].copy()
-    if day_df.empty:
-        st.info("Für diesen Tag gibt es keine Einträge."); st.stop()
 
-    # Pick two matches
-    day_df = day_df.reset_index(drop=True)
-    day_df["Label"] = day_df.apply(lambda r: f"{r['Slot']} — {r['Typ']} — {r['Spieler']}", axis=1)
-    idx_a = st.selectbox("Match A", options=day_df.index.tolist(), format_func=lambda i: day_df.loc[i, "Label"])
-    idx_b = st.selectbox("Match B", options=day_df.index.tolist(), format_func=lambda i: day_df.loc[i, "Label"])
+    sel_day = st.date_input("Datum wählen", value=valid_days[-1], help="Wähle den Tag, an dem du Änderungen vornehmen willst.")
+    day_view = df_edit[df_edit["Datum_dt"].dt.date.eq(sel_day)].copy()
+    if day_view.empty:
+        st.info("Für dieses Datum gibt es keine Einträge."); st.stop()
 
-    row_a = day_df.loc[idx_a]
-    row_b = day_df.loc[idx_b]
+    # keep original row indices so we can update precisely
+    day_view = day_view.copy()
+    day_view["RowID"] = day_view.index
+    day_view["Label"] = day_view.apply(lambda r: f"{r['Slot']} — {r['Typ']} — {r['Spieler']}", axis=1)
 
-    pA = st.selectbox("Spieler aus Match A", split_players(row_a["Spieler"]))
-    pB = st.selectbox("Spieler aus Match B", split_players(row_b["Spieler"]))
-
-    # ---- Build hypothetical plan after swap (two rows) ----
-    df_after = df_edit.copy()
-    mask_a = (
-        (df_after["Datum_dt"] == row_a["Datum_dt"]) &
-        (df_after["Slot"] == row_a["Slot"]) &
-        (df_after["Typ"] == row_a["Typ"]) &
-        (df_after["Spieler"] == row_a["Spieler"])
+    st.markdown("### 1) Spieler **ersetzen** (ein Match → anderer Spieler)")
+    st.caption(
+        "Wähle ein Match und den **Spieler, der raus soll**. "
+        "Die Liste ‚Ersatzspieler‘ zeigt nur Spieler, die **an diesem Wochentag verfügbar** sind "
+        "und **nicht im Urlaub/Blackout** sind. Sie ist nach **Saison-Einsätzen (aufsteigend)** sortiert."
     )
-    mask_b = (
-        (df_after["Datum_dt"] == row_b["Datum_dt"]) &
-        (df_after["Slot"] == row_b["Slot"]) &
-        (df_after["Typ"] == row_b["Typ"]) &
-        (df_after["Spieler"] == row_b["Spieler"])
+
+    # --- 1A: choose match (blank default)
+    match_options = [(int(r.RowID), r.Label) for _, r in day_view.iterrows()]
+    match_choice_raw = st.selectbox(
+        "Match wählen",
+        options=blank_first([rid for rid, _ in match_options]),
+        format_func=lambda rid: label_or_blank(
+            next((lbl for rrid, lbl in match_options if rrid == rid), ""), "— bitte wählen —"
+        ),
+        key="rep_match_select",
     )
-    if mask_a.any():
-        df_after.loc[mask_a] = df_after.loc[mask_a].apply(lambda r: swap_players_in_row(r, pA, pB), axis=1)
-    if mask_b.any():
-        df_after.loc[mask_b] = df_after.loc[mask_b].apply(lambda r: swap_players_in_row(r, pA, pB), axis=1)
+    if match_choice_raw == "":
+        st.write("⬆️ Bitte wähle zuerst ein Match aus.")
+    else:
+        sel_row = day_view.set_index("RowID").loc[int(match_choice_raw)]
+        current_players = split_players(sel_row["Spieler"])
+        # 1B: choose player to remove (blank default)
+        out_choice = st.selectbox(
+            "Spieler **herausnehmen**",
+            options=blank_first(current_players),
+            format_func=lambda x: label_or_blank(x),
+            key="rep_out_select",
+        )
 
-    # ---- Minimal rule check: holidays + weekday availability for the two affected rows ----
-    masks_two = mask_a | mask_b
-    violations = check_min_rules_for_swap(df_after, masks_two, sel_day)
+        if out_choice == "":
+            st.write("⬆️ Bitte wähle den zu ersetzenden Spieler.")
+        else:
+            # Build eligible replacements
+            exclusions = set(current_players)  # avoid duplicates in same match
+            candidates = eligible_replacements(df_edit, sel_row["Tag"], sel_day, exclusions)
 
-    if violations:
-        st.error("Regelverletzungen (nur Urlaub & Wochentag):")
-        for m in violations:
-            st.write("•", m)
+            # labels with counts
+            cand_values = [c["name"] for c in candidates]
+            cand_labels = {
+                c["name"]: f"{c['name']} — Woche: {c['week']} | Saison: {c['season']}" for c in candidates
+            }
 
-    # ---- Swap button: disabled if violations exist ----
-    if st.button("🔁 Spieler tauschen & auf GitHub speichern", disabled=bool(violations)):
-        # Commit swap to editable DataFrame
-        st.session_state.df_edit = df_after
+            repl_choice = st.selectbox(
+                "Ersatzspieler (gefiltert nach Wochentag/Urlaub), sortiert nach **Saison** ↓",
+                options=blank_first(cand_values),
+                format_func=lambda n: label_or_blank(cand_labels.get(n, "")),
+                key="rep_in_select",
+            )
 
-        # Save to GitHub main
-        try:
-            to_save = st.session_state.df_edit[["Datum","Tag","Slot","Typ","Spieler"]]
-            csv_bytes = to_save.to_csv(index=False).encode("utf-8")
-            msg = f"Swap {pA} ↔ {pB} on {sel_day} via Streamlit"
-            res = github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
-            sha = res.get("commit", {}).get("sha", "")[:7]
-            st.success(f"Gespeichert auf GitHub (main) ✅ Commit {sha}")
-        except Exception as e:
-            st.error(f"GitHub-Speicherung fehlgeschlagen: {e}")
+            # Preview and commit
+            if repl_choice:
+                # Build preview row after replacement to re-check rules
+                df_after = df_edit.copy()
+                mask_row = df_after.index == int(sel_row["RowID"])
+                if mask_row.any():
+                    df_after.loc[mask_row] = df_after.loc[mask_row].apply(
+                        lambda r: replace_player_in_row(r, out_choice, repl_choice), axis=1
+                    )
+                # Minimal rule check only for changed row
+                violations = check_min_rules_for_mask(df_after, mask_row, sel_day)
 
-    # Preview edited day
-    st.subheader("Vorschau – Tagesplan nach Tausch")
-    preview = df_after[df_after["Datum_dt"].dt.date.eq(sel_day)].sort_values(["Datum_dt","Startzeit_sort","Slot"])
+                if violations:
+                    st.error("Regelverletzungen (nur Urlaub & Wochentag):")
+                    for m in violations:
+                        st.write("•", m)
+
+                if st.button("✅ Ersetzen & auf GitHub speichern", disabled=bool(violations), key="btn_replace_commit"):
+                    st.session_state.df_edit = df_after
+                    try:
+                        to_save = st.session_state.df_edit[["Datum","Tag","Slot","Typ","Spieler"]]
+                        csv_bytes = to_save.to_csv(index=False).encode("utf-8")
+                        msg = f"Replace {out_choice} → {repl_choice} on {sel_day} ({sel_row['Slot']}) via Streamlit"
+                        res = github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
+                        sha = res.get("commit", {}).get("sha", "")[:7]
+                        st.success(f"Gespeichert auf GitHub (main) ✅ Commit {sha}")
+                    except Exception as e:
+                        st.error(f"GitHub-Speicherung fehlgeschlagen: {e}")
+
+    st.markdown("---")
+    st.markdown("### 2) **Zwei Matches**: Spieler **tauschen**")
+    st.caption("Tausche je **einen Spieler** zwischen zwei Matches am selben Datum. Es gelten wieder nur **Urlaub/Blackout** & **Wochentag**.")
+
+    # --- 2A: pick two matches (blank defaults)
+    idx_a_choice = st.selectbox(
+        "Match A",
+        options=blank_first([int(r.RowID) for _, r in day_view.iterrows()]),
+        format_func=lambda rid: label_or_blank(
+            day_view.set_index("RowID").loc[rid, "Label"] if rid != "" else ""
+        ),
+        key="swap_match_a",
+    )
+    idx_b_choice = st.selectbox(
+        "Match B",
+        options=blank_first([int(r.RowID) for _, r in day_view.iterrows()]),
+        format_func=lambda rid: label_or_blank(
+            day_view.set_index("RowID").loc[rid, "Label"] if rid != "" else ""
+        ),
+        key="swap_match_b",
+    )
+
+    if not idx_a_choice or not idx_b_choice:
+        st.write("⬆️ Bitte wähle zwei Matches aus.")
+    else:
+        row_a = day_view.set_index("RowID").loc[int(idx_a_choice)]
+        row_b = day_view.set_index("RowID").loc[int(idx_b_choice)]
+        players_a = split_players(row_a["Spieler"])
+        players_b = split_players(row_b["Spieler"])
+
+        # --- 2B: pick one player from each (blank defaults)
+        pA = st.selectbox("Spieler aus Match A", options=blank_first(players_a), format_func=label_or_blank, key="swap_player_a")
+        pB = st.selectbox("Spieler aus Match B", options=blank_first(players_b), format_func=label_or_blank, key="swap_player_b")
+
+        if not pA or not pB:
+            st.write("⬆️ Bitte wähle je **einen** Spieler aus beiden Matches.")
+        else:
+            # Build hypothetical plan after swap
+            df_after = df_edit.copy()
+            mask_a = df_after.index == int(row_a["RowID"])
+            mask_b = df_after.index == int(row_b["RowID"])
+            if mask_a.any():
+                df_after.loc[mask_a] = df_after.loc[mask_a].apply(lambda r: swap_players_in_row(r, pA, pB), axis=1)
+            if mask_b.any():
+                df_after.loc[mask_b] = df_after.loc[mask_b].apply(lambda r: swap_players_in_row(r, pA, pB), axis=1)
+
+            # Minimal checks for the two changed rows
+            violations = check_min_rules_for_mask(df_after, (mask_a | mask_b), sel_day)
+            if violations:
+                st.error("Regelverletzungen (nur Urlaub & Wochentag):")
+                for m in violations:
+                    st.write("•", m)
+
+            if st.button("🔁 Tauschen & auf GitHub speichern", disabled=bool(violations), key="btn_swap_commit"):
+                st.session_state.df_edit = df_after
+                try:
+                    to_save = st.session_state.df_edit[["Datum","Tag","Slot","Typ","Spieler"]]
+                    csv_bytes = to_save.to_csv(index=False).encode("utf-8")
+                    msg = f"Swap {pA} ↔ {pB} on {sel_day} via Streamlit"
+                    res = github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
+                    sha = res.get("commit", {}).get("sha", "")[:7]
+                    st.success(f"Gespeichert auf GitHub (main) ✅ Commit {sha}")
+                except Exception as e:
+                    st.error(f"GitHub-Speicherung fehlgeschlagen: {e}")
+
+    # ---------- Preview & Reset ----------
+    st.markdown("---")
+    st.subheader("Vorschau – Tagesplan")
+    preview = st.session_state.df_edit[st.session_state.df_edit["Datum_dt"].dt.date.eq(sel_day)].sort_values(
+        ["Datum_dt", "Startzeit_sort", "Slot"]
+    )
     st.dataframe(preview[["Datum","Tag","Slot","Typ","Spieler"]], use_container_width=True)
 
-    # Optional reset
     if st.button("↩️ Änderungen verwerfen (Reset)"):
         st.session_state.df_edit = df.copy()
         st.rerun()
