@@ -357,45 +357,35 @@ def count_season_matches(df_plan: pd.DataFrame, player: str) -> int:
     return int(df_plan["Spieler"].str.contains(fr"\b{re.escape(player)}\b", regex=True).sum())
 
 def eligible_replacements(df_plan: pd.DataFrame, tag: str, d: date, exclude: set):
-    """
-    All players from dataset who can play that weekday and are not on holiday/blackout,
-    excluding 'exclude'. Returns list of dicts with name + counts for sorting/labels.
-    """
-    # take every unique player ever seen
-    all_players = sorted(
-        p for p in df_exp["Spieler_Name"].dropna().unique().tolist()
-        if str(p).strip()
-    )
+    """Players available that weekday and not on holiday/blackout, excluding current match players."""
+    all_players = sorted(p for p in df_exp["Spieler_Name"].dropna().unique().tolist() if str(p).strip())
     items = []
     for name in all_players:
         if name in exclude:
             continue
         days = JOTFORM.get(name)
         if not days or tag not in days:
-            continue  # must match weekday list
+            continue
         if is_holiday(name, d):
-            continue   # must not be on holiday/blackout
+            continue
         items.append({
             "name": name,
             "week": count_week_matches(df_plan, name, d),
             "season": count_season_matches(df_plan, name),
         })
-    # sort by season asc, then week asc, then name
     items.sort(key=lambda x: (x["season"], x["week"], x["name"]))
     return items
 
 def blank_first(options):
-    """Prepend a blank option for nicer defaults."""
     return [""] + list(options)
 
-def label_or_blank(x, when_blank="— bitte wählen —"):
-    return when_blank if (x is None or x == "") else str(x)
+def display_or_blank(val, blank="— bitte wählen —"):
+    return blank if (val is None or val == "") else str(val)
 
-# --------------------------- UI ---------------------------
+# ---------- Password helper (simple; no form/rerun) ----------
 def check_edit_password() -> bool:
     if st.session_state.get("edit_ok", False):
         return True
-    # simple prompt (no form) to avoid rerun lag on mobile
     st.write("🔒 Editieren erfordert ein Passwort.")
     pw = st.text_input("Passwort", type="password", key="edit_pw")
     if st.button("Login", key="edit_login_btn"):
@@ -408,98 +398,97 @@ def check_edit_password() -> bool:
 
 with tab3:
     st.header("Plan bearbeiten – geschützter Bereich")
-
     if not check_edit_password():
         st.stop()
 
-    # Editable working copy
+    # Working copy
     if "df_edit" not in st.session_state:
         st.session_state.df_edit = df.copy()
     df_edit = st.session_state.df_edit
 
     st.info(
         "Hier kannst du **1) einen Spieler in einem Match ersetzen** oder **2) zwei Spieler zwischen zwei Matches tauschen**.  "
-        "Die App prüft nur **Urlaub/Blackout** und **Wochentags-Verfügbarkeit (Jotform)**. "
-        "Bei erfolgreicher Änderung wird **direkt auf GitHub (main)** gespeichert."
+        "Es werden nur **Urlaub/Blackout** und **Wochentags-Verfügbarkeit (Jotform)** geprüft. "
+        "Bei Erfolg wird **direkt auf GitHub (main)** gespeichert."
     )
 
-    # ---------- Common: date selection and day view  ----------
+    # ----- Common: date selection & day view -----
     valid_days = sorted(df_edit["Datum_dt"].dropna().dt.date.unique())
     if not valid_days:
         st.warning("Keine Daten vorhanden."); st.stop()
 
     sel_day = st.date_input("Datum wählen", value=valid_days[-1], help="Wähle den Tag, an dem du Änderungen vornehmen willst.")
-    day_view = df_edit[df_edit["Datum_dt"].dt.date.eq(sel_day)].copy()
-    if day_view.empty:
+    day_df = df_edit[df_edit["Datum_dt"].dt.date.eq(sel_day)].copy()
+    if day_df.empty:
         st.info("Für dieses Datum gibt es keine Einträge."); st.stop()
 
-    # keep original row indices so we can update precisely
-    day_view = day_view.copy()
-    day_view["RowID"] = day_view.index
-    day_view["Label"] = day_view.apply(lambda r: f"{r['Slot']} — {r['Typ']} — {r['Spieler']}", axis=1)
+    # Keep original index as RowID for precise updates
+    day_df = day_df.copy()
+    day_df["RowID"] = day_df.index
+    day_df["Label"] = day_df.apply(lambda r: f"{r['Slot']} — {r['Typ']} — {r['Spieler']}", axis=1)
+    id_to_label = dict(zip(day_df["RowID"], day_df["Label"]))  # safer than .loc in format_func
 
+    # ============= 1) REPLACE ONE PLAYER IN A MATCH =============
     st.markdown("### 1) Spieler **ersetzen** (ein Match → anderer Spieler)")
     st.caption(
         "Wähle ein Match und den **Spieler, der raus soll**. "
-        "Die Liste ‚Ersatzspieler‘ zeigt nur Spieler, die **an diesem Wochentag verfügbar** sind "
-        "und **nicht im Urlaub/Blackout** sind. Sie ist nach **Saison-Einsätzen (aufsteigend)** sortiert."
+        "Die Liste **Ersatzspieler** zeigt nur Spieler, die **an diesem Wochentag verfügbar** sind "
+        "und **nicht im Urlaub/Blackout** sind. Sortierung: **Saison** (aufsteigend), dann **Woche**."
     )
 
-    # --- 1A: choose match (blank default)
-    match_options = [(int(r.RowID), r.Label) for _, r in day_view.iterrows()]
-    match_choice_raw = st.selectbox(
+    # 1A) Choose match (blank default)
+    match_ids = [int(x) for x in day_df["RowID"].tolist()]
+    sel_match_id = st.selectbox(
         "Match wählen",
-        options=blank_first([rid for rid, _ in match_options]),
-        format_func=lambda rid: label_or_blank(
-            next((lbl for rrid, lbl in match_options if rrid == rid), ""), "— bitte wählen —"
-        ),
+        options=blank_first(match_ids),
+        format_func=lambda rid: display_or_blank(id_to_label.get(rid, "")),
         key="rep_match_select",
     )
-    if match_choice_raw == "":
+
+    if sel_match_id == "":
         st.write("⬆️ Bitte wähle zuerst ein Match aus.")
     else:
-        sel_row = day_view.set_index("RowID").loc[int(match_choice_raw)]
+        sel_row = day_df[day_df["RowID"] == sel_match_id].iloc[0]
         current_players = split_players(sel_row["Spieler"])
-        # 1B: choose player to remove (blank default)
+
+        # 1B) Choose player to remove (blank default)
         out_choice = st.selectbox(
             "Spieler **herausnehmen**",
             options=blank_first(current_players),
-            format_func=lambda x: label_or_blank(x),
+            format_func=display_or_blank,
             key="rep_out_select",
         )
 
         if out_choice == "":
             st.write("⬆️ Bitte wähle den zu ersetzenden Spieler.")
         else:
-            # Build eligible replacements
-            exclusions = set(current_players)  # avoid duplicates in same match
+            # Eligible replacements
+            exclusions = set(current_players)
             candidates = eligible_replacements(df_edit, sel_row["Tag"], sel_day, exclusions)
 
-            # labels with counts
             cand_values = [c["name"] for c in candidates]
-            cand_labels = {
-                c["name"]: f"{c['name']} — Woche: {c['week']} | Saison: {c['season']}" for c in candidates
-            }
+            cand_label = {c["name"]: f"{c['name']} — Woche: {c['week']} | Saison: {c['season']}" for c in candidates}
 
             repl_choice = st.selectbox(
-                "Ersatzspieler (gefiltert nach Wochentag/Urlaub), sortiert nach **Saison** ↓",
+                "Ersatzspieler (nach Wochentag/Urlaub gefiltert) – sortiert nach **Saison** ↓",
                 options=blank_first(cand_values),
-                format_func=lambda n: label_or_blank(cand_labels.get(n, "")),
+                format_func=lambda n: display_or_blank(cand_label.get(n, "")),
                 key="rep_in_select",
             )
 
-            # Preview and commit
-            if repl_choice:
-                # Build preview row after replacement to re-check rules
+            if repl_choice == "":
+                st.write("⬆️ Bitte wähle einen Ersatzspieler.")
+            else:
+                # Build preview plan with the replacement
                 df_after = df_edit.copy()
-                mask_row = df_after.index == int(sel_row["RowID"])
+                mask_row = (df_after.index == sel_match_id)  # <-- use the id variable, not sel_row["RowID"]
                 if mask_row.any():
                     df_after.loc[mask_row] = df_after.loc[mask_row].apply(
                         lambda r: replace_player_in_row(r, out_choice, repl_choice), axis=1
                     )
-                # Minimal rule check only for changed row
-                violations = check_min_rules_for_mask(df_after, mask_row, sel_day)
 
+                # Minimal checks on the changed row
+                violations = check_min_rules_for_mask(df_after, mask_row, sel_day)
                 if violations:
                     st.error("Regelverletzungen (nur Urlaub & Wochentag):")
                     for m in violations:
@@ -518,52 +507,48 @@ with tab3:
                         st.error(f"GitHub-Speicherung fehlgeschlagen: {e}")
 
     st.markdown("---")
+    # ============= 2) SWAP ONE PLAYER BETWEEN TWO MATCHES =============
     st.markdown("### 2) **Zwei Matches**: Spieler **tauschen**")
-    st.caption("Tausche je **einen Spieler** zwischen zwei Matches am selben Datum. Es gelten wieder nur **Urlaub/Blackout** & **Wochentag**.")
+    st.caption("Tausche je **einen** Spieler zwischen zwei Matches am selben Datum. Checks: **Urlaub/Blackout** & **Wochentag**.")
 
-    # --- 2A: pick two matches (blank defaults)
-    idx_a_choice = st.selectbox(
+    # 2A) Pick two matches (blank by default)
+    sel_a_id = st.selectbox(
         "Match A",
-        options=blank_first([int(r.RowID) for _, r in day_view.iterrows()]),
-        format_func=lambda rid: label_or_blank(
-            day_view.set_index("RowID").loc[rid, "Label"] if rid != "" else ""
-        ),
+        options=blank_first(match_ids),
+        format_func=lambda rid: display_or_blank(id_to_label.get(rid, "")),
         key="swap_match_a",
     )
-    idx_b_choice = st.selectbox(
+    sel_b_id = st.selectbox(
         "Match B",
-        options=blank_first([int(r.RowID) for _, r in day_view.iterrows()]),
-        format_func=lambda rid: label_or_blank(
-            day_view.set_index("RowID").loc[rid, "Label"] if rid != "" else ""
-        ),
+        options=blank_first(match_ids),
+        format_func=lambda rid: display_or_blank(id_to_label.get(rid, "")),
         key="swap_match_b",
     )
 
-    if not idx_a_choice or not idx_b_choice:
+    if not sel_a_id or not sel_b_id:
         st.write("⬆️ Bitte wähle zwei Matches aus.")
     else:
-        row_a = day_view.set_index("RowID").loc[int(idx_a_choice)]
-        row_b = day_view.set_index("RowID").loc[int(idx_b_choice)]
+        row_a = day_df[day_df["RowID"] == sel_a_id].iloc[0]
+        row_b = day_df[day_df["RowID"] == sel_b_id].iloc[0]
         players_a = split_players(row_a["Spieler"])
         players_b = split_players(row_b["Spieler"])
 
-        # --- 2B: pick one player from each (blank defaults)
-        pA = st.selectbox("Spieler aus Match A", options=blank_first(players_a), format_func=label_or_blank, key="swap_player_a")
-        pB = st.selectbox("Spieler aus Match B", options=blank_first(players_b), format_func=label_or_blank, key="swap_player_b")
+        pA = st.selectbox("Spieler aus Match A", options=blank_first(players_a), format_func=display_or_blank, key="swap_player_a")
+        pB = st.selectbox("Spieler aus Match B", options=blank_first(players_b), format_func=display_or_blank, key="swap_player_b")
 
         if not pA or not pB:
             st.write("⬆️ Bitte wähle je **einen** Spieler aus beiden Matches.")
         else:
-            # Build hypothetical plan after swap
+            # Hypothetical plan after swap
             df_after = df_edit.copy()
-            mask_a = df_after.index == int(row_a["RowID"])
-            mask_b = df_after.index == int(row_b["RowID"])
+            mask_a = (df_after.index == sel_a_id)
+            mask_b = (df_after.index == sel_b_id)
             if mask_a.any():
                 df_after.loc[mask_a] = df_after.loc[mask_a].apply(lambda r: swap_players_in_row(r, pA, pB), axis=1)
             if mask_b.any():
                 df_after.loc[mask_b] = df_after.loc[mask_b].apply(lambda r: swap_players_in_row(r, pA, pB), axis=1)
 
-            # Minimal checks for the two changed rows
+            # Minimal checks for both changed rows
             violations = check_min_rules_for_mask(df_after, (mask_a | mask_b), sel_day)
             if violations:
                 st.error("Regelverletzungen (nur Urlaub & Wochentag):")
