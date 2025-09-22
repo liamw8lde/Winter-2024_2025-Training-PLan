@@ -98,21 +98,17 @@ MON_CORE_SLOT = ("Montag", "D", "20:00", "120", "PLA", "Doppel")
 MON_CORE_MANDATORY = {"Martin Lange", "Bjoern Junker"}
 MON_CORE_POOL = {"Frank Petermann", "Lars Staubermann", "Peter Plaehn"}
 MON_CORE_EXCLUDED = {"Mohamad Albadry"}
-# Exception: Lena allowed ONLY if Liam is also in the four
-MON_CORE_LENA_EXCEPTION = ("Lena Meiss", "Liam Wilde")
+MON_CORE_LENA_EXCEPTION = ("Lena Meiss", "Liam Wilde")  # Lena allowed only if Liam also plays
 
 # ---- Protected players (hard) ----
 def protected_player_ok(name: str, tag: str, s_time: str) -> bool:
-    # Return True if assignment respects protected rule; False otherwise
     if name == "Patrick Buehrsch":
         return s_time == "18:00"
     if name == "Frank Petermann":
         return s_time in {"19:00", "20:00"}
     if name == "Matthias Duddek":
-        # only 18:00 or 19:00 (never >=20:00)
-        return s_time in {"18:00", "19:00"}
+        return s_time in {"18:00", "19:00"}  # never >= 20:00
     if name == "Dirk Kistner":
-        # Mo/Mi/Do only; on Wednesday only 19:00
         if tag not in {"Montag", "Mittwoch", "Donnerstag"}:
             return False
         if tag == "Mittwoch" and s_time != "19:00":
@@ -121,7 +117,6 @@ def protected_player_ok(name: str, tag: str, s_time: str) -> bool:
     if name == "Arndt Stueber":
         return tag == "Mittwoch" and s_time == "19:00"
     if name in {"Thommy Grueneberg", "Thomas Grueneberg"}:
-        # 70/30 distribution is season-level; treat assignment-level as allowed at 18,19,20 on Wed only 20:00 occasionally.
         return s_time in {"18:00", "19:00", "20:00"}
     if name == "Jens Hafner":
         return tag == "Mittwoch" and s_time == "19:00"
@@ -191,7 +186,7 @@ WEEKLY_CAPS = {"Tobias Kahl": 1, "Dirk Kistner": 2, "Torsten Bartel": 1}
 SEASON_CAPS = {"Torsten Bartel": 5, "Frank Petermann": 12}
 
 # ---- Global blackouts (any year) ----
-BLACKOUT_MMDD = { (12,24), (12,25), (12,31) }
+BLACKOUT_MMDD = {(12, 24), (12, 25), (12, 31)}
 
 # ---- Holidays (authoritative) ----
 RAW_HOLIDAYS = """
@@ -247,12 +242,6 @@ Torsten Bartel: 2025-09-15 → 2025-09-24; 2025-09-29 → 2025-10-15; 2025-10-20
 Wolfgang Aleksik: 2025-09-01 → 2025-09-16; 2025-09-18 → 2025-10-14; 2025-10-16 → 2025-10-21; 2025-10-23 → 2025-11-04; 2025-11-06 → 2025-11-11; 2025-11-13 → 2025-11-25; 2025-11-27 → 2025-12-09; 2025-12-11 → 2025-12-31.
 """
 
-def daterange(a: date, b: date):
-    d = a
-    while d <= b:
-        yield d
-        d += timedelta(days=1)
-
 def parse_holidays(raw: str):
     out = {}
     for line in raw.strip().splitlines():
@@ -273,7 +262,6 @@ def parse_holidays(raw: str):
                 except:
                     pass
             else:
-                # single date
                 try:
                     d = datetime.strptime(chunk.strip(), "%Y-%m-%d").date()
                     periods.append((d, d))
@@ -286,8 +274,7 @@ def parse_holidays(raw: str):
 HOLIDAYS = parse_holidays(RAW_HOLIDAYS)
 
 def is_holiday(name: str, d: date) -> bool:
-    # global blackouts
-    if (d.month, d.day) in BLACKOUT_MMDD:
+    if (d.month, d.day) in {(12, 24), (12, 25), (12, 31)}:
         return True
     ranges = HOLIDAYS.get(name, [])
     return any(start <= d <= end for (start, end) in ranges)
@@ -295,33 +282,30 @@ def is_holiday(name: str, d: date) -> bool:
 # ---- Monday PLA core check ----
 def check_monday_core(row_players: list, d: date):
     players = set(row_players)
-    # Must include mandatory unless on holiday
+    violations = []
+
     missing = [p for p in MON_CORE_MANDATORY if p not in players]
     missing_not_on_holiday = [p for p in missing if not is_holiday(p, d)]
-    violations = []
     if missing_not_on_holiday:
         violations.append(f"mon_pla_core: Fehlend ohne Urlaub: {', '.join(missing_not_on_holiday)}")
 
-    # Others must be ONLY from pool (except Lena exception with Liam)
     others = players - MON_CORE_MANDATORY
-    if not others.issubset(MON_CORE_POOL | {MON_CORE_LENA_EXCEPTION[0], MON_CORE_LENA_EXCEPTION[1]}):
-        bad = others - (MON_CORE_POOL | {MON_CORE_LENA_EXCEPTION[0], MON_CORE_LENA_EXCEPTION[1]})
-        violations.append(f"mon_pla_core: Unzulässige Spieler: {', '.join(sorted(bad))}")
+    allowed_set = MON_CORE_POOL | {MON_CORE_LENA_EXCEPTION[0], MON_CORE_LENA_EXCEPTION[1]}
+    if not others.issubset(allowed_set):
+        bad = others - allowed_set
+        if bad:
+            violations.append(f"mon_pla_core: Unzulässige Spieler: {', '.join(sorted(bad))}")
 
-    # Lena exception rule
     if MON_CORE_LENA_EXCEPTION[0] in players and MON_CORE_LENA_EXCEPTION[1] not in players:
         violations.append("mon_pla_core: Lena Meiss nur erlaubt, wenn Liam Wilde mitspielt.")
 
-    # Women never (except Lena rule handled above)
     women_here = players & (WOMEN - {MON_CORE_LENA_EXCEPTION[0]})
     if women_here:
         violations.append(f"mon_pla_core: Frauen unzulässig: {', '.join(sorted(women_here))}")
 
-    # Mohamad never allowed
     if "Mohamad Albadry" in players:
         violations.append("mon_pla_core: Mohamad Albadry unzulässig.")
 
-    # Pool size: exactly two from pool when both mandatory are present (not enforced if mandatory on holiday)
     if not missing_not_on_holiday:
         pool_count = len(players & MON_CORE_POOL)
         if pool_count != 2 or len(players) != 4:
@@ -332,7 +316,6 @@ def check_monday_core(row_players: list, d: date):
 # ---- Week coverage check (STRICT) ----
 def weekly_coverage_violations(df_week: pd.DataFrame):
     v = []
-    # Count appearances of required combos in this week
     for tag, reqs in ALLOWED_SLOTS.items():
         for (art, tm, dur, court, typ) in reqs:
             mask = (
@@ -345,7 +328,7 @@ def weekly_coverage_violations(df_week: pd.DataFrame):
             )
             cnt = int(mask.sum())
             if cnt != 1:
-                v.append(f"weekly_coverage: {tag} {art}{tm}-{dur} PL{court[-1]} {typ} erscheint {cnt}× (erwartet 1×).")
+                v.append(f"weekly_coverage: {tag} {art}{tm}-{dur} {court} {typ} erscheint {cnt}× (erwartet 1×).")
     return v
 
 # ---- Allowed slot check for a single row ----
@@ -359,14 +342,11 @@ def allowed_slot_ok(row) -> bool:
 # ---- Global time rules ----
 def global_time_violations(row):
     v = []
-    # No starts after 20:00
     if row["S_Time"] > "20:00":
         v.append("global_time: Start nach 20:00 unzulässig.")
-    # Wednesday doubles exactly 20:00/90m
     if row["Tag"] == "Mittwoch" and row["S_Art"] == "D":
         if not (row["S_Time"] == "20:00" and row["S_Dur"] == "90"):
             v.append("global_time: Mi-Doppel muss 20:00 für 90min sein.")
-    # Duration/court must match code -> ensured by allowed slots already; keep extra guard
     if not allowed_slot_ok(row):
         v.append("global_time: Slot stimmt nicht exakt mit erlaubtem Code überein.")
     return v
@@ -396,12 +376,10 @@ def caps_violations(df_plan: pd.DataFrame, y: int, w: int):
     v = []
     week_df = df_plan[(df_plan["Jahr"] == y) & (df_plan["Woche"] == w)]
     all_rows = df_plan
-    # weekly
     for name, cap in WEEKLY_CAPS.items():
         cnt = week_df["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum()
         if cnt > cap:
             v.append(f"weekly_cap: {name} > {cap}/Woche ({cnt}).")
-    # season
     for name, cap in SEASON_CAPS.items():
         cnt = all_rows["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum()
         if cnt > cap:
@@ -412,13 +390,9 @@ def caps_violations(df_plan: pd.DataFrame, y: int, w: int):
 def availability_violations(row_tag: str, row_players: list, s_time: str):
     v = []
     for p in row_players:
-        # Protected rule may override weekday/time constraints (handled separately)
         allowed_days = JOTFORM.get(p)
-        if allowed_days is None:
-            continue
-        if row_tag not in allowed_days:
+        if allowed_days is not None and row_tag not in allowed_days:
             v.append(f"availability: {p} ist laut Jotform nicht für {row_tag} verfügbar.")
-        # also check protected rule per player/time
         if not protected_player_ok(p, row_tag, s_time):
             v.append(f"protected: {p} verletzt Schutzregel ({row_tag} {s_time}).")
     return v
@@ -441,52 +415,32 @@ def rank_violations(row_players: list, typ: str):
                 advisory.append("doubles_unbalanced_advisory: Rangverteilung ungünstig.")
     return hard, advisory
 
-# ---- Weekly coverage helper to get week frame ----
 def week_frame(df_plan: pd.DataFrame, y: int, w: int):
     return df_plan[(df_plan["Jahr"] == y) & (df_plan["Woche"] == w)]
 
-# ---- Build violations for a full plan (focused to one ISO week + edit day) ----
 def plan_violations(df_plan: pd.DataFrame, focus_day: date):
     v_hard = []
     v_advice = []
-
-    # Blackout days hard stop
     mmdd = (focus_day.month, focus_day.day)
     if mmdd in BLACKOUT_MMDD:
         v_hard.append(f"blackout: {focus_day} ist gesperrt (global).")
 
-    # Week context
     iso = pd.Timestamp(focus_day).isocalendar()
     y, w = int(iso.year), int(iso.week)
     week_df = week_frame(df_plan, y, w)
 
-    # Weekly coverage strict
     v_hard += weekly_coverage_violations(week_df)
-
-    # Caps
     v_hard += caps_violations(df_plan, y, w)
-
-    # One-per-day for focus day
     v_hard += one_per_day_violations(df_plan, focus_day)
 
-    # Row-level checks for all rows of this week (ensures global rules applied)
     for _, r in week_df.iterrows():
         row_players = [x.strip() for x in r["Spieler"].split(",") if x.strip()]
-        # Allowed slot + global time
         v_hard += [f"{r['Tag']} {r['Slot']}: {msg}" for msg in global_time_violations(r)]
-
-        # Women singles
         v_hard += [f"{r['Tag']} {r['Slot']}: {msg}" for msg in women_singles_violation(row_players, r["Typ"])]
-
-        # Availability + protected
         v_hard += [f"{r['Tag']} {r['Slot']}: {msg}" for msg in availability_violations(r["Tag"], row_players, r["S_Time"])]
-
-        # Rank rules
         hard, adv = rank_violations(row_players, r["Typ"])
         v_hard += [f"{r['Tag']} {r['Slot']}: {msg}" for msg in hard]
         v_advice += [f"{r['Tag']} {r['Slot']}: {msg}" for msg in adv]
-
-        # Monday core slot special
         if (r["Tag"], r["S_Art"], r["S_Time"], r["S_Dur"], r["S_Court"], r["Typ"]) == MON_CORE_SLOT:
             v_hard += [f"{r['Tag']} {r['Slot']}: {msg}" for msg in check_monday_core(row_players, r["Datum_dt"].date())]
 
@@ -597,7 +551,7 @@ with tab3:
     pA = st.selectbox("Spieler aus Match A", split_players(row_a["Spieler"]))
     pB = st.selectbox("Spieler aus Match B", split_players(row_b["Spieler"]))
 
-    # Quick hard checks on type/court (optional toggles could be added)
+    # Enforce same type; court equality optional
     same_type_required = True
     same_court_required = False
 
@@ -620,25 +574,42 @@ with tab3:
     if mask_b.any():
         df_after.loc[mask_b] = df_after.loc[mask_b].apply(lambda r: swap_players_in_row(r, pA, pB), axis=1)
 
-    # ---- Validate rules (focused to the ISO week of sel_day) ----
-    hard, advice = plan_violations(df_after, sel_day)
+    # ---- Rules summary ABOVE the button ----
+    with st.expander("Regeln (HARD/STRICT) – Übersicht", expanded=True):
+        st.markdown(
+            """
+- **Allowed slots (STRICT):** nur die vorgegebenen Slots (Wochentag + Code + Platz + Dauer) sind gültig.  
+- **Weekly coverage (STRICT):** jede erlaubte Slot-Kombi muss **genau 1× pro ISO-Woche** vorkommen.
+- **Global time (HARD):** kein Start **nach 20:00**; Mi-Doppel **20:00 / 90 min**; Slot muss exakt passen.
+- **Protected Players (HARD):** z. B. Patrick **nur 18:00**, Jens Hafner **nur Mi 19:00**, Arndt **nur Mi 19:00**, Dirk mit Sonderregeln (Mo/Mi/Do; Mi nur 19:00; max 2/Woche), etc.
+- **Women & Singles (HARD):** Anke, Lena, Martina, Kerstin **kein Einzel**.
+- **Mo Kernslot D20:00–120 PLA (HARD):** immer **Martin Lange** & **Bjoern Junker** (außer Urlaub); die anderen 2 nur aus {Frank Petermann, Lars Staubermann, Peter Plaehn}.  
+  Keine Frauen (Ausnahme: **Lena nur mit Liam**), **Mohamad nie**, keine externen Ersatzspieler.
+- **One-per-day (HARD):** niemand spielt **mehr als 1× pro Datum**.
+- **Caps (HARD):** z. B. Tobias Kahl ≤1/Woche; Dirk ≤2/Woche; Torsten Bartel ≤1/Woche & ≤5/Saison; Frank Petermann ≤12/Saison.
+- **Holidays/Blackouts (HARD):** 24.12/25.12/31.12 gesperrt; Urlaube gemäß Liste. Mo-PLA-Kernslot: Urlaubsausnahme für Kern-Vier (Caps gelten trotzdem).
+- **Ranks:** Einzel **|Δrank| ≤ 2 (HARD)**; Doppel-Balance Hinweis (advisory).
+            """
+        )
 
-    # Extra per-row constraints for the two affected rows
-    rowA_after = df_after[mask_a].iloc[0]
-    rowB_after = df_after[mask_b].iloc[0]
-
+    # ---- Validate full ruleset for the week containing sel_day ----
     def per_row_checks(r):
         v = []
-        if same_type_required and r["Typ"] != (row_a["Typ"] if r.name in df_after[mask_a].index else row_b["Typ"]):
+        # keep swapped rows within type/court constraints relative to their original rows
+        # (simple guard; full legality is handled by global checks)
+        if same_type_required and r["Typ"] not in {row_a["Typ"], row_b["Typ"]}:
             v.append("swap_rule: Unterschiedlicher Match-Typ.")
-        if same_court_required and r["S_Court"] != (row_a["S_Court"] if r.name in df_after[mask_a].index else row_b["S_Court"]):
+        if same_court_required and r["S_Court"] not in {row_a["S_Court"], row_b["S_Court"]}:
             v.append("swap_rule: Unterschiedlicher Platz (PLA/PLB).")
         return v
 
+    hard, advice = plan_violations(df_after, sel_day)
+    rowA_after = df_after[mask_a].iloc[0]
+    rowB_after = df_after[mask_b].iloc[0]
     hard += [f"{rowA_after['Tag']} {rowA_after['Slot']}: {m}" for m in per_row_checks(rowA_after)]
     hard += [f"{rowB_after['Tag']} {rowB_after['Slot']}: {m}" for m in per_row_checks(rowB_after)]
 
-    # ---- Show violations/advisories ----
+    # ---- Violations above the button ----
     if hard:
         st.error("Regelverletzungen:")
         for m in sorted(set(hard)):
@@ -648,10 +619,46 @@ with tab3:
         for m in sorted(set(advice)):
             st.write("•", m)
 
-    # ---- Commit swap if no hard violations ----
-    if st.button("🔁 Spieler tauschen", disabled=bool(hard)):
+    # ========== OVERRIDE CONTROLS ==========
+    st.markdown("---")
+    override_mode = st.toggle("🔧 Regeln übersteuern (Admin)", value=False, help="Nur verwenden, wenn die Abweichung dokumentiert werden soll.")
+    override_reason = ""
+    override_confirm = False
+    if override_mode:
+        override_reason = st.text_area("Begründung für die Übersteuerung (Pflicht)", placeholder="Warum ist dieser Tausch trotz Regelverletzung notwendig?")
+        override_confirm = st.checkbox("Ich bestätige die bewusste Regel-Übersteuerung und akzeptiere die Konsequenzen.", value=False)
+
+    # Enabled if: (no hard + confirm) OR (override on + reason + confirm)
+    confirm_no_override = st.checkbox("Ich bestätige, dass die obigen Regeln eingehalten werden.", value=not bool(hard) and not override_mode)
+    can_swap_without_override = (not hard) and confirm_no_override and not override_mode
+    can_swap_with_override = override_mode and bool(override_reason.strip()) and override_confirm
+    btn_disabled = not (can_swap_without_override or can_swap_with_override)
+
+    if st.button("🔁 Spieler tauschen", disabled=btn_disabled):
+        if override_mode and not can_swap_without_override:
+            if "override_log" not in st.session_state:
+                st.session_state["override_log"] = []
+            st.session_state["override_log"].append({
+                "timestamp": pd.Timestamp.utcnow().isoformat(),
+                "date": str(sel_day),
+                "match_A_before": f"{row_a['Tag']} {row_a['Slot']} — {row_a['Typ']} — {row_a['Spieler']}",
+                "match_B_before": f"{row_b['Tag']} {row_b['Slot']} — {row_b['Typ']} — {row_b['Spieler']}",
+                "player_swap": f"{pA} ↔ {pB}",
+                "hard_violations": sorted(set(hard)),
+                "advisories": sorted(set(advice)),
+                "reason": override_reason.strip(),
+            })
         st.session_state.df_edit = df_after
         st.success(f"Getauscht: {pA} ↔ {pB}")
+
+    if st.session_state.get("override_log"):
+        with st.expander("📜 Override-Audit (letzte 10)", expanded=False):
+            for entry in st.session_state["override_log"][-10:][::-1]:
+                st.markdown(
+                    f"- **{entry['timestamp']}** — {entry['date']} — {entry['player_swap']}  \n"
+                    f"  Grund: _{entry['reason']}_  \n"
+                    f"  Hard: {len(entry['hard_violations'])} | Hinweise: {len(entry['advisories'])}"
+                )
 
     # Preview edited day + export/reset
     st.subheader("Vorschau – Tagesplan nach Tausch")
