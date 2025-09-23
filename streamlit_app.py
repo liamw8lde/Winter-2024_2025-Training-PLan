@@ -512,8 +512,8 @@ with tab3:
     st.info(
         "Hier kannst du **1) einen Spieler in einem Match ersetzen** oder **2) zwei Spieler zwischen zwei Matches tauschen**.  "
         "Geprüft werden **Urlaub/Blackout**, **Wochentags-Verfügbarkeit (Jotform)**, **geschützte Spieler (HARD)**, "
-        "**Frauen & Einzel** sowie für Einzel **Rangfenster |Δrank| ≤ 2**. "
-        "Bei Erfolg wird **direkt auf GitHub (main)** gespeichert."
+        "**Frauen & Einzel** sowie (bei Einzel) **Rangfenster |Δrank| ≤ 2**. "
+        "Bei Erfolg wird gespeichert."
     )
 
     # ----- Common: date selection & day view -----
@@ -536,8 +536,7 @@ with tab3:
     st.markdown("### 1) Spieler **ersetzen** (ein Match → anderer Spieler)")
     st.caption(
         "Wähle ein Match und den **Spieler, der raus soll**. "
-        "Die Liste **Ersatzspieler** zeigt nur Spieler, die **am Wochentag verfügbar** sind, **nicht im Urlaub**, "
-        "**geschützte Regeln einhalten** und (bei Einzel) das **Rangfenster** erfüllen. "
+        "Die Liste zeigt nur **legale** Ersatzspieler (Wochentag/Urlaub/geschützte Regeln/Rank bei Einzel). "
         "Sortierung: **Saison** ↑, **Woche** ↑, **Rang** ↑."
     )
 
@@ -598,26 +597,34 @@ with tab3:
                         lambda r: replace_player_in_row(r, out_choice, repl_choice), axis=1
                     )
                 violations = check_min_rules_for_mask(df_after, mask_row, sel_day)
-                if violations:
-                    st.error("Regelverletzungen:")
-                    for m in violations: st.write("•", m)
 
-                if st.button("✅ Ersetzen & auf GitHub speichern", disabled=bool(violations), key="btn_replace_commit"):
+                override_ok = False
+                if violations:
+                    with st.expander("Regelverletzungen anzeigen"):
+                        for m in violations: st.write("•", m)
+                    col1, col2 = st.columns([3,1])
+                    reason = col1.text_input("Override-Begründung (Pflicht bei Verstoß)", key="rep_reason")
+                    override_ok = col2.checkbox("Regeln überstimmen", key="rep_override")
+                    save_disabled = not override_ok or (reason.strip() == "")
+                else:
+                    save_disabled = False
+                    reason = ""
+
+                if st.button("✅ Änderung speichern", disabled=save_disabled, key="btn_replace_commit"):
                     st.session_state.df_edit = df_after
                     try:
                         to_save = st.session_state.df_edit[["Datum","Tag","Slot","Typ","Spieler"]]
                         csv_bytes = to_save.to_csv(index=False).encode("utf-8")
-                        msg = f"Replace {out_choice} → {repl_choice} on {sel_day} ({sel_row['Slot']}) via Streamlit"
-                        res = github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
-                        sha = res.get("commit", {}).get("sha", "")[:7]
-                        st.success(f"Gespeichert auf GitHub (main) ✅ Commit {sha}")
+                        msg = f"Replace {out_choice} → {repl_choice} on {sel_day} ({sel_row['Slot']}) {(' | override: ' + reason) if reason else ''}"
+                        github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
+                        st.success("Gespeichert ✅")
                     except Exception as e:
-                        st.error(f"GitHub-Speicherung fehlgeschlagen: {e}")
+                        st.error(f"Speichern fehlgeschlagen: {e}")
 
     st.markdown("---")
     # ================= 2) SWAP =================
     st.markdown("### 2) **Zwei Matches**: Spieler **tauschen**")
-    st.caption("Tausche je **einen** Spieler zwischen zwei Matches am selben Datum. Checks wie oben.")
+    st.caption("Tausche je **einen** Spieler zwischen zwei Matches am selben Datum. Checks wie oben; Override möglich.")
 
     sel_a_id = st.selectbox(
         "Match A",
@@ -655,24 +662,30 @@ with tab3:
             if mask_b.any():
                 df_after.loc[mask_b] = df_after.loc[mask_b].apply(lambda r: swap_players_in_row(r, pA, pB), axis=1)
 
-            # if any swapped row is a singles match, ensure rank window vs its new opponent
-            # (this is naturally covered by check_min_rules_for_mask via protected helpers below)
             violations = check_min_rules_for_mask(df_after, (mask_a | mask_b), sel_day)
-            if violations:
-                st.error("Regelverletzungen:")
-                for m in violations: st.write("•", m)
 
-            if st.button("🔁 Tauschen & auf GitHub speichern", disabled=bool(violations), key="btn_swap_commit"):
+            override_ok = False
+            if violations:
+                with st.expander("Regelverletzungen anzeigen"):
+                    for m in violations: st.write("•", m)
+                col1, col2 = st.columns([3,1])
+                reason_swap = col1.text_input("Override-Begründung (Pflicht bei Verstoß)", key="swap_reason")
+                override_ok = col2.checkbox("Regeln überstimmen", key="swap_override")
+                save_disabled = not override_ok or (reason_swap.strip() == "")
+            else:
+                save_disabled = False
+                reason_swap = ""
+
+            if st.button("🔁 Tausch speichern", disabled=save_disabled, key="btn_swap_commit"):
                 st.session_state.df_edit = df_after
                 try:
                     to_save = st.session_state.df_edit[["Datum","Tag","Slot","Typ","Spieler"]]
                     csv_bytes = to_save.to_csv(index=False).encode("utf-8")
-                    msg = f"Swap {pA} ↔ {pB} on {sel_day} via Streamlit"
-                    res = github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
-                    sha = res.get("commit", {}).get("sha", "")[:7]
-                    st.success(f"Gespeichert auf GitHub (main) ✅ Commit {sha}")
+                    msg = f"Swap {pA} ↔ {pB} on {sel_day} {(' | override: ' + reason_swap) if reason_swap else ''}"
+                    github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
+                    st.success("Gespeichert ✅")
                 except Exception as e:
-                    st.error(f"GitHub-Speicherung fehlgeschlagen: {e}")
+                    st.error(f"Speichern fehlgeschlagen: {e}")
 
     # ---------- Preview & Reset ----------
     st.markdown("---")
