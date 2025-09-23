@@ -27,7 +27,12 @@ def _postprocess(df: pd.DataFrame):
     for c in required:
         df[c] = df[c].astype(str).str.strip()
 
-    df["Datum_dt"] = pd.to_datetime(df["Datum"], dayfirst=True, errors="coerce")
+    # Robust date parsing: DE (dd.mm.yyyy) first, then ISO (yyyy-mm-dd)
+    s = df["Datum"].astype(str).str.strip()
+    d1 = pd.to_datetime(s, format="%d.%m.%Y", errors="coerce")
+    d2 = pd.to_datetime(s, format="%Y-%m-%d", errors="coerce")
+    df["Datum_dt"] = d1.fillna(d2)
+
     iso = df["Datum_dt"].dt.isocalendar()
     df["Jahr"] = iso["year"]
     df["Woche"] = iso["week"]
@@ -390,7 +395,7 @@ with tab2:
         pf = pf.sort_values(["Datum_dt", "Startzeit_sort", "Slot"])
         for p in sel_players:
             st.metric(p, int((pf["Spieler_Name"] == p).sum()))
-        st.dataframe(pf[["Spieler_Name", "Datum", "Tag", "Slot", "Typ", "Spieler"]], use_container_width=True)
+        st.dataframe(pf[["Spieler_Name", "Datum", "Tag", "Slot", "Typ", "Spieler"]], width="stretch")
     else:
         st.info("Bitte Spieler auswählen.")
 
@@ -697,7 +702,7 @@ with tab3:
     preview = st.session_state.df_edit[st.session_state.df_edit["Datum_dt"].dt.date.eq(sel_day)].sort_values(
         ["Datum_dt", "Startzeit_sort", "Slot"]
     )
-    st.dataframe(preview[["Datum","Tag","Slot","Typ","Spieler"]], use_container_width=True)
+    st.dataframe(preview[["Datum","Tag","Slot","Typ","Spieler"]], width="stretch")
 
     if st.button("↩️ Änderungen verwerfen (Reset)"):
         st.session_state.df_edit = df.copy()
