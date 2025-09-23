@@ -10,6 +10,13 @@ st.set_page_config(page_title="Wochenplan", layout="wide", initial_sidebar_state
 CSV_URL = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/Winterplan.csv"
 EDIT_PASSWORD = "tennis"  # protects only the "Plan bearbeiten" tab
 
+# -------------------- Reload helper --------------------
+def reload_from_source():
+    st.cache_data.clear()
+    st.session_state.pop("df_edit", None)
+    st.session_state.pop("wk_idx", None)
+    st.rerun()
+
 # -------------------- Data helpers --------------------
 def _postprocess(df: pd.DataFrame):
     required = ["Datum", "Tag", "Slot", "Typ", "Spieler"]
@@ -64,8 +71,14 @@ def render_week(df: pd.DataFrame, year: int, week: int):
 try:
     df, df_exp = load_csv(CSV_URL)
 except Exception as e:
-    st.error(f"Datenfehler beim Laden der GitHub-CSV: {e}")
+    st.error(f"Datenfehler beim Laden der CSV: {e}")
     st.stop()
+
+# -------------------- Top reload button --------------------
+col_reload, _ = st.columns([1, 6])
+with col_reload:
+    if st.button("🔄 Daten neu laden", help="CSV neu laden & Cache leeren"):
+        reload_from_source()
 
 # ==============================================================
 # =============== RULE SOURCES (HARD where stated) =============
@@ -257,7 +270,6 @@ def count_18_19(df_plan: pd.DataFrame, name: str) -> int:
 def protected_player_violations(name: str, tag: str, s_time: str, typ: str,
                                 df_after: pd.DataFrame, d: date):
     v = []
-    # slot/time/day rules
     if name == "Patrick Buehrsch" and s_time != "18:00":
         v.append(f"{name}: nur 18:00 erlaubt.")
     if name == "Frank Petermann" and s_time not in {"19:00", "20:00"}:
@@ -318,7 +330,7 @@ def github_get_file_sha(branch_override=None):
     elif r.status_code == 404:
         return None
     else:
-        raise RuntimeError(f"GitHub GET failed {r.status_code}: {r.text}")
+        raise RuntimeError(f"GET failed {r.status_code}: {r.text}")
 
 def github_put_file(csv_bytes: bytes, message: str, branch_override=None):
     repo, branch, path = _gh_repo_info()
@@ -339,7 +351,7 @@ def github_put_file(csv_bytes: bytes, message: str, branch_override=None):
     r = requests.put(url, headers=_github_headers(), data=json.dumps(payload), timeout=20)
     if r.status_code in (200, 201):
         return r.json()
-    raise RuntimeError(f"GitHub PUT failed {r.status_code}: {r.text}")
+    raise RuntimeError(f"PUT failed {r.status_code}: {r.text}")
 
 # ==============================================================
 # =========================  UI  ===============================
@@ -406,22 +418,16 @@ def swap_players_in_row(row, a_name, b_name):
     return row
 
 def check_min_rules_for_row(row, d: date, df_after: pd.DataFrame):
-    """Hard checks: holiday/blackout, weekday availability, protected players, women singles ban."""
     v = []
     players = split_players(row["Spieler"])
-    tag = str(row["Tag"])
-    s_time = str(row["S_Time"])
-    typ = str(row["Typ"])
-    # holiday/blackout
+    tag = str(row["Tag"]); s_time = str(row["S_Time"]); typ = str(row["Typ"])
     for p in players:
         if is_holiday(p, d):
             v.append(f"{p}: Urlaub/Blackout am {d}.")
-    # weekday availability
     for p in players:
         days = JOTFORM.get(p)
         if days is not None and tag not in days:
             v.append(f"{p}: laut Jotform nicht verfügbar an {tag}.")
-    # protected + women singles
     for p in players:
         v += protected_player_violations(p, tag, s_time, typ, df_after, d)
     return sorted(set(v))
@@ -433,15 +439,12 @@ def check_min_rules_for_mask(df_after: pd.DataFrame, mask, d: date):
     return sorted(set(v))
 
 def singles_opponent(row, out_player: str):
-    """For an 'Einzel' row, return the name of the other player."""
     players = [p for p in split_players(row["Spieler"]) if p != out_player]
     if row["Typ"].lower().startswith("einzel") and len(players) == 1:
         return players[0]
     return None
 
 def _violations_if_added(df_plan: pd.DataFrame, name: str, tag: str, slot_time: str, slot_typ: str, d: date):
-    """Return violations list for 'name' if they were added to this slot/date (simulate 'after' counts)."""
-    # Simulate by appending a virtual row for counting rules (Dirk cap, 70/30, etc.)
     y, w = week_of(d)
     virtual = pd.DataFrame([{
         "Tag": tag, "S_Time": slot_time, "Typ": slot_typ, "Spieler": name,
@@ -450,53 +453,30 @@ def _violations_if_added(df_plan: pd.DataFrame, name: str, tag: str, slot_time: 
     df_virtual = pd.concat([df_plan, virtual], ignore_index=True)
 
     v = []
-    # holiday / blackout
     if is_holiday(name, d):
         v.append(f"{name}: Urlaub/Blackout am {d}.")
-    # weekday availability
     days = JOTFORM.get(name)
     if days is not None and tag not in days:
         v.append(f"{name}: laut Jotform nicht verfügbar an {tag}.")
-    # protected + women singles using virtual counts
     v += protected_player_violations(name, tag, slot_time, slot_typ, df_virtual, d)
     return sorted(set(v))
 
 def eligible_replacements_all(df_plan: pd.DataFrame, tag: str, d: date, exclude: set,
-                              slot_time: str, slot_typ: str, singles_vs: str | None):
-    """
-    Show ALL players (except those already in the match), but compute:
-      - week/season counts
-      - rank
-      - violations if added to this slot (holiday/weekday/protected/women&singles)
-      - if singles: also add rank-window violation when |Δrank| > 2
-    Sorted by (season asc, week asc, rank asc, name).
-    """
+                              slot_time: str, slot_typ: str, singles_vs):
     all_players = sorted(p for p in df_exp["Spieler_Name"].dropna().unique().tolist() if str(p).strip())
     items = []
     for name in all_players:
         if name in exclude:
             continue
-
-        # base metrics
         wk = count_week(df_plan, name, d)
         ssn = count_season(df_plan, name)
         rk = RANK.get(name, 999)
-
         viol = _violations_if_added(df_plan, name, tag, slot_time, slot_typ, d)
-
-        # singles rank window marker (as a violation item if needed)
         if slot_typ.lower().startswith("einzel") and singles_vs:
             r1 = RANK.get(name); r2 = RANK.get(singles_vs)
             if r1 is None or r2 is None or abs(r1 - r2) > 2:
-                viol.append(f"Singles-Rangfenster verletzt (Δ>{abs((r1 or 9) - (r2 or 9)) if (r1 and r2) else '?'})")
-
-        items.append({
-            "name": name,
-            "week": wk,
-            "season": ssn,
-            "rank": rk,
-            "violations": sorted(set(viol)),
-        })
+                viol.append("Singles-Rangfenster verletzt (Δ>2)")
+        items.append({"name": name, "week": wk, "season": ssn, "rank": rk, "violations": sorted(set(viol))})
     items.sort(key=lambda x: (x["season"], x["week"], x["rank"], x["name"]))
     return items
 
@@ -506,7 +486,6 @@ def blank_first(options):
 def display_or_blank(val, blank="— bitte wählen —"):
     return blank if (val is None or val == "") else str(val)
 
-# ---------- Password helper (simple; no form/rerun) ----------
 def check_edit_password() -> bool:
     if st.session_state.get("edit_ok", False):
         return True
@@ -525,29 +504,26 @@ with tab3:
     if not check_edit_password():
         st.stop()
 
-    # Working copy
     if "df_edit" not in st.session_state:
         st.session_state.df_edit = df.copy()
     df_edit = st.session_state.df_edit
 
     st.info(
         "Hier kannst du **1) einen Spieler in einem Match ersetzen** oder **2) zwei Spieler zwischen zwei Matches tauschen**.  "
-        "Geprüft werden **Urlaub/Blackout**, **Wochentags-Verfügbarkeit (Jotform)**, **geschützte Spieler (HARD)**, "
-        "**Frauen & Einzel** sowie (bei Einzel) **Rangfenster |Δrank| ≤ 2**. "
-        "Die Ersatzliste zeigt jetzt **alle** Spieler; bei Verstößen steht **⛔** (Override nötig)."
+        "Checks: **Urlaub/Blackout**, **Wochentags-Verfügbarkeit (Jotform)**, **geschützte Spieler (HARD)**, "
+        "**Frauen & Einzel**, **Rangfenster (Einzel)**. "
+        "Ersatzliste zeigt **alle** Spieler: **✅ legal** / **⛔ Verstoß** (Override nötig)."
     )
 
-    # ----- Common: date selection & day view -----
     valid_days = sorted(df_edit["Datum_dt"].dropna().dt.date.unique())
     if not valid_days:
         st.warning("Keine Daten vorhanden."); st.stop()
 
-    sel_day = st.date_input("Datum wählen", value=valid_days[-1], help="Wähle den Tag, an dem du Änderungen vornehmen willst.")
+    sel_day = st.date_input("Datum wählen", value=valid_days[-1])
     day_df = df_edit[df_edit["Datum_dt"].dt.date.eq(sel_day)].copy()
     if day_df.empty:
         st.info("Für dieses Datum gibt es keine Einträge."); st.stop()
 
-    # Keep original index as RowID
     day_df = day_df.copy()
     day_df["RowID"] = day_df.index
     day_df["Label"] = day_df.apply(lambda r: f"{r['Slot']} — {r['Typ']} — {r['Spieler']}", axis=1)
@@ -555,11 +531,7 @@ with tab3:
 
     # ================= 1) REPLACE =================
     st.markdown("### 1) Spieler **ersetzen** (ein Match → anderer Spieler)")
-    st.caption(
-        "Wähle ein Match und den **Spieler, der raus soll**. "
-        "Die Liste zeigt **alle** Spieler. **✅** = legal, **⛔** = Verstoß (Override nötig). "
-        "Sortierung: **Saison** ↑, **Woche** ↑, **Rang** ↑."
-    )
+    st.caption("Sortierung in der Liste: **Saison** ↑, **Woche** ↑, **Rang** ↑. **⛔** zeigt konkrete Gründe im Expander.")
 
     match_ids = [int(x) for x in day_df["RowID"].tolist()]
     sel_match_id = st.selectbox(
@@ -586,7 +558,7 @@ with tab3:
             st.write("⬆️ Bitte wähle den zu ersetzenden Spieler.")
         else:
             singles_vs = singles_opponent(sel_row, out_choice)
-            exclusions = set(current_players)  # keep out current match members only
+            exclusions = set(current_players)
             candidates = eligible_replacements_all(
                 df_edit, sel_row["Tag"], sel_day, exclusions,
                 slot_time=str(sel_row["S_Time"]), slot_typ=str(sel_row["Typ"]),
@@ -614,17 +586,15 @@ with tab3:
             if repl_choice == "":
                 st.write("⬆️ Bitte wähle einen Ersatzspieler.")
             else:
-                # preview state after replace
                 df_after = df_edit.copy()
                 mask_row = (df_after.index == sel_match_id)
                 if mask_row.any():
                     df_after.loc[mask_row] = df_after.loc[mask_row].apply(
                         lambda r: replace_player_in_row(r, out_choice, repl_choice), axis=1
                     )
-                # compute violations for the changed row (authoritative for enabling save)
+
                 violations = check_min_rules_for_mask(df_after, mask_row, sel_day)
 
-                # also show candidate-specific reasons, if any
                 cand_viol = name_to_item[repl_choice]["violations"]
                 if cand_viol:
                     with st.expander("Hinweise zum gewählten Ersatz (Slot-spezifisch)"):
@@ -651,13 +621,14 @@ with tab3:
                         msg = f"Replace {out_choice} → {repl_choice} on {sel_day} ({sel_row['Slot']}) {(' | override: ' + reason) if reason else ''}"
                         github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
                         st.success("Gespeichert ✅")
+                        reload_from_source()  # show updates immediately
                     except Exception as e:
                         st.error(f"Speichern fehlgeschlagen: {e}")
 
     st.markdown("---")
     # ================= 2) SWAP =================
     st.markdown("### 2) **Zwei Matches**: Spieler **tauschen**")
-    st.caption("Tausche je **einen** Spieler zwischen zwei Matches am selben Datum. Checks wie oben; Override möglich.")
+    st.caption("Tausche je **einen** Spieler zwischen zwei Matches am selben Datum. Override möglich.")
 
     sel_a_id = st.selectbox(
         "Match A",
@@ -686,7 +657,6 @@ with tab3:
         if not pA or not pB:
             st.write("⬆️ Bitte wähle je **einen** Spieler aus beiden Matches.")
         else:
-            # preview state after swap
             df_after = df_edit.copy()
             mask_a = (df_after.index == sel_a_id)
             mask_b = (df_after.index == sel_b_id)
@@ -717,6 +687,7 @@ with tab3:
                     msg = f"Swap {pA} ↔ {pB} on {sel_day} {(' | override: ' + reason_swap) if reason_swap else ''}"
                     github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
                     st.success("Gespeichert ✅")
+                    reload_from_source()  # show updates immediately
                 except Exception as e:
                     st.error(f"Speichern fehlgeschlagen: {e}")
 
