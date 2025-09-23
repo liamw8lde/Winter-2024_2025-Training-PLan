@@ -179,7 +179,7 @@ df, df_exp, current_sha = data_tuple
 st.session_state["csv_sha"] = current_sha
 if warn:
     st.warning(warn)
-    
+
 # -------------------- Top controls --------------------
 col_reload, col_ref = st.columns([1.5, 6])
 with col_reload:
@@ -254,36 +254,100 @@ RANK = {
 # ---- Global blackouts (any year) ----
 BLACKOUT_MMDD = {(12, 24), (12, 25), (12, 31)}
 
-# ---- Holidays list ----
+# ---- Holidays list (FULL, no placeholders) ----
 RAW_HOLIDAYS = """
-... (omitted here for brevity; keep your full RAW_HOLIDAYS block unchanged) ...
+Andreas Dank: 2015-12-24 → 2015-12-26; 2015-12-31 → 2016-01-01.
+Anke Ihde: 2025-09-25.
+Arndt Stueber: 2025-10-16 → 2025-11-03; 2025-11-13 → 2025-11-24; 2025-12-11 → 2025-12-31.
+Bernd Robioneck: 2025-12-01 → 2025-12-08; 2025-12-22 → 2026-01-04.
+Bernd Sotzek: 2025-01-01 → 2026-01-04.
+Bjoern: 2025-10-25; 2025-10-31; 2025-12-20; 2025-12-31.
+Bjoern Junker: 2025-10-25 → 2025-10-31; 2025-12-20 → 2025-12-31.
+Carsten Gambal: 2025-09-29 → 2025-10-10; 2025-11-12 → 2025-11-13; 2025-12-24 → 2026-01-01.
+Dirk Kistner: 2025-09-18 → 2025-09-22; 2025-10-02; 2025-10-30; 2025-12-22 → 2025-12-31.
+Frank Koller: 2025-10-10 → 2025-10-31; 2025-12-18 → 2026-01-05.
+Frank Petermann: 2025-09-08 → 2025-09-14; 2025-10-13 → 2025-10-25; 2025-12-01 → 2025-12-07; 2025-12-24; 2025-12-31.
+Gunnar Brix: 2025-09-01 → 2025-09-26; 2025-10-06 → 2025-10-11; 2025-10-20 → 2025-10-25; 2025-11-17 → 2025-11-22; 2025-12-22 → 2025-12-31.
+Heiko Thomsen: 2025-09-15 → 2025-10-10; 2025-11-12; 2025-12-03; 2025-12-17; 2025-12-22 → 2025-12-26; 2025-12-31.
+Jan Pappenheim: 
+Jens Hafner: 2025-10-23 → 2025-11-02; 2025-12-24 → 2025-12-26.
+Jens Krause: 2025-09-24 → 2025-09-24.
+Joerg: 2025-12-22; 2026-01-02.
+Joerg Peters: 2025-12-22 → 2026-01-02.
+Juergen: 2025-12-22; 2026-01-04.
+Juergen Hansen: 2025-12-22 → 2026-01-04.
+Kai Schroeder: 2025-10-06 → 2025-10-12; 2025-12-01 → 2025-12-06; 2025-12-22 → 2025-12-27; 2026-01-19 → 2026-01-31.
+Karsten: 2025-11-12 → 2025-11-13; 2025-12-24; 2025-12-29.
+Karsten Usinger: 2025-09-01 → 2025-11-03; 2025-12-22 → 2025-12-29; 2025-12-31.
+Kerstin Baarck: 2025-09-01 → 2025-10-31.
+Lars Staubermann: 2025-10-06 → 2025-10-26; 2026-03-23 → 2026-04-12.
+Lena Meiss: 2025-01-01 → 2025-09-20; 2025-10-01 → 2025-10-31.
+Liam Wilde: 2025-12-24.
+Lorenz Kramp: 2025-10-04 → 2025-10-24.
+Manfred Grell: 2025-09-22; 2025-10-06.
+Markus Muench: 2025-10-13 → 2025-10-19; 2025-12-22 → 2026-01-04.
+Martin Lange: 2025-12-22 → 2026-01-04.
+Martina Schmidt: 2025-11-08 → 2025-11-22; 2026-01-01.
+Matthias Duddek: 2025-11-04 → 2025-11-10; 2025-12-24 → 2025-12-31.
+Meiss: 2025-01-01 → 2025-09-20.
+Michael Bock: 2025-12-20 → 2026-01-04.
+Michael Rabehl: 2025-10-09 → 2025-10-12.
+Mohamad Albadry: 
+Muench: 2025-10-13; 2025-10-19; 2025-12-22; 2026-01-04.
+Oliver Boess: 2025-09-01 → 2025-09-30; 2025-12-01 → 2025-12-07; 2025-12-24 → 2025-12-25.
+Patrick Buehrsch: 2025-11-01 → 2025-11-30.
+Peter Plaehn: 
+Ralf Colditz: 2025-09-08 → 2025-09-30; 2025-12-22 → 2026-01-03.
+Schroeder: 2025-10-06; 2025-10-12; 2025-12-01; 2025-12-06; 2025-12-22; 2025-12-27.
+Sebastian Braune: 2025-10-20 → 2025-10-30; 2025-12-28 → 2026-01-06.
+Stueber: 2025-10-16; 2025-10-31; 2025-11-17; 2025-11-23; 2025-12-15; 2025-12-31.
+Thomas Bretschneider: 
+Thomas Grueneberg: 
+Tobias Kahl: 2025-09-01 → 2025-09-14; 2025-09-23 → 2025-10-09; 2025-10-20 → 2025-10-31; 2025-12-22 → 2025-12-31.
+Torsten Bartel: 2025-09-15 → 2025-09-24; 2025-09-29 → 2025-10-15; 2025-10-20 → 2025-10-23; 2025-10-29 → 2025-11-19; 2025-11-24 → 2025-12-17; 2025-12-22 → 2025-12-25.
+Wolfgang Aleksik: 2025-09-01 → 2025-09-16; 2025-09-18 → 2025-10-14; 2025-10-16 → 2025-10-21; 2025-10-23 → 2025-11-04; 2025-11-06 → 2025-11-11; 2025-11-13 → 2025-11-25; 2025-11-27 → 2025-12-09; 2025-12-11 → 2025-12-31.
 """
 
 def parse_holidays(raw: str):
     out = {}
-    for line in raw.strip().splitlines():
-        if not line.strip():
+    for line in (raw or "").splitlines():
+        line = line.strip()
+        if not line:
             continue
+        # ignore comment/placeholder/malformed lines safely
+        if line.startswith("#") or line.startswith("//"):
+            continue
+        if ":" not in line:
+            continue
+
         name, rest = line.split(":", 1)
         name = name.strip()
+        rest = rest.strip()
+        if not name or not rest:
+            continue
+
         periods = []
-        for chunk in re.split(r"[;.\s]+", rest.strip()):
+        # split by ';' or '.'; keep arrows '→' inside chunks
+        for chunk in re.split(r"[;.]+" , rest):
+            chunk = chunk.strip(" .;")
             if not chunk:
                 continue
             if "→" in chunk:
-                s, e = [x.strip() for x in chunk.split("→")]
+                s, e = [x.strip() for x in chunk.split("→", 1)]
                 try:
                     sd = datetime.strptime(s, "%Y-%m-%d").date()
                     ed = datetime.strptime(e, "%Y-%m-%d").date()
                     periods.append((sd, ed))
-                except:
+                except Exception:
                     pass
             else:
+                # single date
                 try:
-                    d = datetime.strptime(chunk.strip(), "%Y-%m-%d").date()
+                    d = datetime.strptime(chunk, "%Y-%m-%d").date()
                     periods.append((d, d))
-                except:
+                except Exception:
                     pass
+
         if periods:
             out[name] = out.get(name, []) + periods
     return out
@@ -598,13 +662,6 @@ with tab3:
         if out_choice == "":
             st.write("⬆️ Bitte wähle den zu ersetzenden Spieler.")
         else:
-            # Candidate pool (all players, show legal/violations)
-            def singles_opponent(row, out_player: str):
-                players = [p for p in split_players(row["Spieler"]) if p != out_player]
-                if row["Typ"].lower().startswith("einzel") and len(players) == 1:
-                    return players[0]
-                return None
-
             singles_vs = singles_opponent(sel_row, out_choice)
             exclusions = set(current_players)  # exclude only current match members
             candidates = eligible_replacements_all(
@@ -671,7 +728,9 @@ with tab3:
                         csv_bytes = to_save.to_csv(index=False).encode("utf-8")
                         msg = f"Replace {out_choice} → {repl_choice} on {sel_day} ({sel_row['Slot']}) {(' | override: ' + reason) if reason else ''}"
                         res = github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
-                        _set_ref_after_save(res)  # <<< use commit sha only
+                        # set commit SHA as ref and reload
+                        new_ref = (res.get("commit") or {}).get("sha")
+                        st.session_state["csv_ref"] = new_ref or st.secrets.get("GITHUB_BRANCH", "main")
                         st.success("Gespeichert ✅")
                         st.cache_data.clear()
                         st.rerun()
@@ -739,7 +798,8 @@ with tab3:
                     csv_bytes = to_save.to_csv(index=False).encode("utf-8")
                     msg = f"Swap {pA} ↔ {pB} on {sel_day} {(' | override: ' + reason_swap) if reason_swap else ''}"
                     res = github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
-                    _set_ref_after_save(res)  # <<< use commit sha only
+                    new_ref = (res.get("commit") or {}).get("sha")
+                    st.session_state["csv_ref"] = new_ref or st.secrets.get("GITHUB_BRANCH", "main")
                     st.success("Gespeichert ✅")
                     st.cache_data.clear()
                     st.rerun()
