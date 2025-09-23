@@ -174,11 +174,12 @@ data_tuple, warn = _safe_load_by_ref_with_fallback(current_ref, default_ref)
 if data_tuple is None:
     st.error(warn or "Unbekannter Ladefehler.")
     st.stop()
-(df, df_exp, current_sha), _ = data_tuple
+
+df, df_exp, current_sha = data_tuple
 st.session_state["csv_sha"] = current_sha
 if warn:
     st.warning(warn)
-
+    
 # -------------------- Top controls --------------------
 col_reload, col_ref = st.columns([1.5, 6])
 with col_reload:
