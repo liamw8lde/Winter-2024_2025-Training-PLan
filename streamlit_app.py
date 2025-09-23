@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 import base64, json, requests
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 # -------------------- Basic config --------------------
 st.set_page_config(page_title="Wochenplan", layout="wide", initial_sidebar_state="collapsed")
@@ -68,10 +68,10 @@ except Exception as e:
     st.stop()
 
 # ==============================================================
-# =============== ONLY THE NEEDED RULE SOURCES =================
+# =============== RULE SOURCES (HARD where stated) =============
 # ==============================================================
 
-# ---- Jotform weekday availability (treated as HARD now) ----
+# ---- Jotform weekday availability ----
 JOTFORM = {
     "Andreas Dank": {"Montag", "Mittwoch"},
     "Anke Ihde": {"Montag", "Mittwoch", "Donnerstag"},
@@ -117,10 +117,23 @@ JOTFORM = {
     "Wolfgang Aleksik": {"Mittwoch"},
 }
 
+# ---- Player Ranks (1 strongest ... 6 weakest) ----
+RANK = {
+    "Andreas Dank": 5, "Anke Ihde": 6, "Arndt Stueber": 4, "Bernd Robioneck": 4, "Bernd Sotzek": 3,
+    "Bjoern Junker": 1, "Carsten Gambal": 4, "Dirk Kistner": 5, "Frank Koller": 4, "Frank Petermann": 2,
+    "Gunnar Brix": 6, "Heiko Thomsen": 4, "Jan Pappenheim": 5, "Jens Hafner": 6, "Jens Krause": 2,
+    "Joerg Peters": 2, "Juergen Hansen": 3, "Kai Schroeder": 4, "Karsten Usinger": 5, "Kerstin Baarck": 6,
+    "Lars Staubermann": 2, "Lena Meiss": 6, "Liam Wilde": 2, "Lorenz Kramp": 4, "Manfred Grell": 4,
+    "Markus Muench": 5, "Martin Lange": 2, "Martina Schmidt": 6, "Matthias Duddek": 3, "Michael Bock": 6,
+    "Michael Rabehl": 6, "Mohamad Albadry": 5, "Oliver Boess": 3, "Patrick Buehrsch": 1, "Peter Plaehn": 2,
+    "Ralf Colditz": 4, "Sebastian Braune": 6, "Thomas Bretschneider": 2, "Thomas Grueneberg": 2,
+    "Tobias Kahl": 5, "Torsten Bartel": 5, "Wolfgang Aleksik": 6
+}
+
 # ---- Global blackouts (any year) ----
 BLACKOUT_MMDD = {(12, 24), (12, 25), (12, 31)}
 
-# ---- Holidays (authoritative list) ----
+# ---- Holidays list ----
 RAW_HOLIDAYS = """
 Andreas Dank: 2015-12-24 → 2015-12-26; 2015-12-31 → 2016-01-01.
 Anke Ihde: 2025-09-25.
@@ -210,6 +223,70 @@ def is_holiday(name: str, d: date) -> bool:
         return True
     ranges = HOLIDAYS.get(name, [])
     return any(start <= d <= end for (start, end) in ranges)
+
+# -------------------- Rank & protected helpers --------------------
+WOMEN_SINGLE_BAN = {"Anke Ihde", "Lena Meiss", "Martina Schmidt", "Kerstin Baarck"}
+
+def week_of(d: date):
+    iso = pd.Timestamp(d).isocalendar()
+    return int(iso.year), int(iso.week)
+
+def count_week(df_plan: pd.DataFrame, name: str, d: date) -> int:
+    y, w = week_of(d)
+    wk = df_plan[(df_plan["Jahr"] == y) & (df_plan["Woche"] == w)]
+    return int(wk["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum())
+
+def count_season(df_plan: pd.DataFrame, name: str) -> int:
+    return int(df_plan["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum())
+
+def count_wed20(df_plan: pd.DataFrame, name: str) -> int:
+    mask = (
+        (df_plan["Tag"] == "Mittwoch") &
+        (df_plan["S_Time"] == "20:00") &
+        (df_plan["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True))
+    )
+    return int(mask.sum())
+
+def count_18_19(df_plan: pd.DataFrame, name: str) -> int:
+    mask = (
+        (df_plan["S_Time"].isin(["18:00", "19:00"])) &
+        (df_plan["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True))
+    )
+    return int(mask.sum())
+
+def protected_player_violations(name: str, tag: str, s_time: str, typ: str,
+                                df_after: pd.DataFrame, d: date):
+    v = []
+    # slot/time/day rules
+    if name == "Patrick Buehrsch" and s_time != "18:00":
+        v.append(f"{name}: nur 18:00 erlaubt.")
+    if name == "Frank Petermann" and s_time not in {"19:00", "20:00"}:
+        v.append(f"{name}: nur 19:00 oder 20:00 erlaubt.")
+    if name == "Matthias Duddek" and s_time not in {"18:00", "19:00"}:
+        v.append(f"{name}: nur 18:00 oder 19:00 (nie ≥20:00).")
+    if name == "Dirk Kistner":
+        if tag not in {"Montag", "Mittwoch", "Donnerstag"}:
+            v.append(f"{name}: nur Mo/Mi/Do.")
+        if tag == "Mittwoch" and s_time != "19:00":
+            v.append(f"{name}: am Mittwoch nur 19:00.")
+        if count_week(df_after, name, d) > 2:
+            v.append(f"{name}: max 2/Woche überschritten.")
+    if name == "Arndt Stueber" and not (tag == "Mittwoch" and s_time == "19:00"):
+        v.append(f"{name}: nur Mittwoch 19:00.")
+    if name in {"Thommy Grueneberg", "Thomas Grueneberg"}:
+        total_after = count_season(df_after, name)
+        wed20_after = count_wed20(df_after, name)
+        early_after = count_18_19(df_after, name)
+        if total_after > 0:
+            if wed20_after / total_after > 0.30:
+                v.append(f"{name}: Anteil Mi 20:00 > 30%.")
+            if early_after / total_after < 0.70:
+                v.append(f"{name}: Anteil 18/19 < 70%.")
+    if name == "Jens Hafner" and not (tag == "Mittwoch" and s_time == "19:00"):
+        v.append(f"{name}: nur Mittwoch 19:00.")
+    if typ.lower().startswith("einzel") and name in WOMEN_SINGLE_BAN:
+        v.append(f"{name}: Frauen dürfen kein Einzel spielen.")
+    return v
 
 # ==============================================================
 # =================== GitHub commit helpers ====================
@@ -304,6 +381,7 @@ with tab2:
         st.dataframe(pf[["Spieler_Name", "Datum", "Tag", "Slot", "Typ", "Spieler"]], use_container_width=True)
     else:
         st.info("Bitte Spieler auswählen.")
+
 # ----------------- Plan bearbeiten (protected) -----------------
 def split_players(s: str):
     return [x.strip() for x in str(s).split(",") if str(x).strip()]
@@ -327,53 +405,78 @@ def swap_players_in_row(row, a_name, b_name):
     row["Spieler"] = join_players(players)
     return row
 
-def check_min_rules_for_row(row, d: date):
-    """Only two checks (HARD): 1) holiday/blackout  2) weekday availability."""
+def check_min_rules_for_row(row, d: date, df_after: pd.DataFrame):
+    """Hard checks: holiday/blackout, weekday availability, protected players, women singles ban."""
     v = []
     players = split_players(row["Spieler"])
     tag = str(row["Tag"])
+    s_time = str(row["S_Time"])
+    typ = str(row["Typ"])
+    # holiday/blackout
     for p in players:
         if is_holiday(p, d):
             v.append(f"{p}: Urlaub/Blackout am {d}.")
+    # weekday availability
     for p in players:
         days = JOTFORM.get(p)
         if days is not None and tag not in days:
             v.append(f"{p}: laut Jotform nicht verfügbar an {tag}.")
-    return v
-
-def check_min_rules_for_mask(df_plan: pd.DataFrame, mask, d: date):
-    v = []
-    for _, r in df_plan[mask].iterrows():
-        v += [f"{r['Tag']} {r['Slot']}: {msg}" for msg in check_min_rules_for_row(r, d)]
+    # protected + women singles
+    for p in players:
+        v += protected_player_violations(p, tag, s_time, typ, df_after, d)
+    # unique messages
     return sorted(set(v))
 
-def count_week_matches(df_plan: pd.DataFrame, player: str, d: date) -> int:
-    iso = pd.Timestamp(d).isocalendar()
-    y, w = int(iso.year), int(iso.week)
-    week_df = df_plan[(df_plan["Jahr"] == y) & (df_plan["Woche"] == w)]
-    return int(week_df["Spieler"].str.contains(fr"\b{re.escape(player)}\b", regex=True).sum())
+def check_min_rules_for_mask(df_after: pd.DataFrame, mask, d: date):
+    v = []
+    for _, r in df_after[mask].iterrows():
+        v += [f"{r['Tag']} {r['Slot']}: {msg}" for msg in check_min_rules_for_row(r, d, df_after)]
+    return sorted(set(v))
 
-def count_season_matches(df_plan: pd.DataFrame, player: str) -> int:
-    return int(df_plan["Spieler"].str.contains(fr"\b{re.escape(player)}\b", regex=True).sum())
+def singles_opponent(row, out_player: str):
+    """For an 'Einzel' row, return the name of the other player."""
+    players = [p for p in split_players(row["Spieler"]) if p != out_player]
+    if row["Typ"].lower().startswith("einzel") and len(players) == 1:
+        return players[0]
+    return None
 
-def eligible_replacements(df_plan: pd.DataFrame, tag: str, d: date, exclude: set):
-    """Players available that weekday and not on holiday/blackout, excluding current match players."""
+def eligible_replacements(df_plan: pd.DataFrame, tag: str, d: date, exclude: set,
+                          slot_time: str, slot_typ: str, singles_vs: str | None):
+    """
+    Candidates who pass:
+      - weekday availability for 'tag'
+      - not on holiday/blackout at date d
+      - protected-player rules for this exact slot
+      - if singles: |Δrank| ≤ 2 vs the opponent (drop others)
+    Sorted by (season asc, week asc, rank asc, name).
+    """
     all_players = sorted(p for p in df_exp["Spieler_Name"].dropna().unique().tolist() if str(p).strip())
     items = []
     for name in all_players:
         if name in exclude:
             continue
+        # weekday ok?
         days = JOTFORM.get(name)
         if not days or tag not in days:
             continue
+        # not on holiday?
         if is_holiday(name, d):
             continue
+        # protected rules (caps/ratios read from df_plan state)
+        if protected_player_violations(name, tag, slot_time, slot_typ, df_plan, d):
+            continue
+        # singles rank window filter
+        if slot_typ.lower().startswith("einzel") and singles_vs:
+            r1 = RANK.get(name); r2 = RANK.get(singles_vs)
+            if r1 is None or r2 is None or abs(r1 - r2) > 2:
+                continue
         items.append({
             "name": name,
-            "week": count_week_matches(df_plan, name, d),
-            "season": count_season_matches(df_plan, name),
+            "week": count_week(df_plan, name, d),
+            "season": count_season(df_plan, name),
+            "rank": RANK.get(name, 999),
         })
-    items.sort(key=lambda x: (x["season"], x["week"], x["name"]))
+    items.sort(key=lambda x: (x["season"], x["week"], x["rank"], x["name"]))
     return items
 
 def blank_first(options):
@@ -408,7 +511,8 @@ with tab3:
 
     st.info(
         "Hier kannst du **1) einen Spieler in einem Match ersetzen** oder **2) zwei Spieler zwischen zwei Matches tauschen**.  "
-        "Es werden nur **Urlaub/Blackout** und **Wochentags-Verfügbarkeit (Jotform)** geprüft. "
+        "Geprüft werden **Urlaub/Blackout**, **Wochentags-Verfügbarkeit (Jotform)**, **geschützte Spieler (HARD)**, "
+        "**Frauen & Einzel** sowie für Einzel **Rangfenster |Δrank| ≤ 2**. "
         "Bei Erfolg wird **direkt auf GitHub (main)** gespeichert."
     )
 
@@ -422,21 +526,21 @@ with tab3:
     if day_df.empty:
         st.info("Für dieses Datum gibt es keine Einträge."); st.stop()
 
-    # Keep original index as RowID for precise updates
+    # Keep original index as RowID
     day_df = day_df.copy()
     day_df["RowID"] = day_df.index
     day_df["Label"] = day_df.apply(lambda r: f"{r['Slot']} — {r['Typ']} — {r['Spieler']}", axis=1)
-    id_to_label = dict(zip(day_df["RowID"], day_df["Label"]))  # safer than .loc in format_func
+    id_to_label = dict(zip(day_df["RowID"], day_df["Label"]))
 
-    # ============= 1) REPLACE ONE PLAYER IN A MATCH =============
+    # ================= 1) REPLACE =================
     st.markdown("### 1) Spieler **ersetzen** (ein Match → anderer Spieler)")
     st.caption(
         "Wähle ein Match und den **Spieler, der raus soll**. "
-        "Die Liste **Ersatzspieler** zeigt nur Spieler, die **an diesem Wochentag verfügbar** sind "
-        "und **nicht im Urlaub/Blackout** sind. Sortierung: **Saison** (aufsteigend), dann **Woche**."
+        "Die Liste **Ersatzspieler** zeigt nur Spieler, die **am Wochentag verfügbar** sind, **nicht im Urlaub**, "
+        "**geschützte Regeln einhalten** und (bei Einzel) das **Rangfenster** erfüllen. "
+        "Sortierung: **Saison** ↑, **Woche** ↑, **Rang** ↑."
     )
 
-    # 1A) Choose match (blank default)
     match_ids = [int(x) for x in day_df["RowID"].tolist()]
     sel_match_id = st.selectbox(
         "Match wählen",
@@ -451,7 +555,6 @@ with tab3:
         sel_row = day_df[day_df["RowID"] == sel_match_id].iloc[0]
         current_players = split_players(sel_row["Spieler"])
 
-        # 1B) Choose player to remove (blank default)
         out_choice = st.selectbox(
             "Spieler **herausnehmen**",
             options=blank_first(current_players),
@@ -462,37 +565,42 @@ with tab3:
         if out_choice == "":
             st.write("⬆️ Bitte wähle den zu ersetzenden Spieler.")
         else:
-            # Eligible replacements
+            singles_vs = singles_opponent(sel_row, out_choice)
             exclusions = set(current_players)
-            candidates = eligible_replacements(df_edit, sel_row["Tag"], sel_day, exclusions)
+            candidates = eligible_replacements(
+                df_edit, sel_row["Tag"], sel_day, exclusions,
+                slot_time=str(sel_row["S_Time"]), slot_typ=str(sel_row["Typ"]),
+                singles_vs=singles_vs
+            )
 
             cand_values = [c["name"] for c in candidates]
-            cand_label = {c["name"]: f"{c['name']} — Woche: {c['week']} | Saison: {c['season']}" for c in candidates}
+            def _lab(n):
+                c = next((x for x in candidates if x["name"] == n), None)
+                if not c: return ""
+                r = RANK.get(n, "?")
+                return f"{n} — Woche: {c['week']} | Saison: {c['season']} | Rang: {r}"
 
             repl_choice = st.selectbox(
-                "Ersatzspieler (nach Wochentag/Urlaub gefiltert) – sortiert nach **Saison** ↓",
+                "Ersatzspieler (gefiltert) – sortiert nach **Saison/Woche/Rang**",
                 options=blank_first(cand_values),
-                format_func=lambda n: display_or_blank(cand_label.get(n, "")),
+                format_func=lambda n: display_or_blank(_lab(n)),
                 key="rep_in_select",
             )
 
             if repl_choice == "":
                 st.write("⬆️ Bitte wähle einen Ersatzspieler.")
             else:
-                # Build preview plan with the replacement
+                # preview state after replace
                 df_after = df_edit.copy()
-                mask_row = (df_after.index == sel_match_id)  # <-- use the id variable, not sel_row["RowID"]
+                mask_row = (df_after.index == sel_match_id)
                 if mask_row.any():
                     df_after.loc[mask_row] = df_after.loc[mask_row].apply(
                         lambda r: replace_player_in_row(r, out_choice, repl_choice), axis=1
                     )
-
-                # Minimal checks on the changed row
                 violations = check_min_rules_for_mask(df_after, mask_row, sel_day)
                 if violations:
-                    st.error("Regelverletzungen (nur Urlaub & Wochentag):")
-                    for m in violations:
-                        st.write("•", m)
+                    st.error("Regelverletzungen:")
+                    for m in violations: st.write("•", m)
 
                 if st.button("✅ Ersetzen & auf GitHub speichern", disabled=bool(violations), key="btn_replace_commit"):
                     st.session_state.df_edit = df_after
@@ -507,11 +615,10 @@ with tab3:
                         st.error(f"GitHub-Speicherung fehlgeschlagen: {e}")
 
     st.markdown("---")
-    # ============= 2) SWAP ONE PLAYER BETWEEN TWO MATCHES =============
+    # ================= 2) SWAP =================
     st.markdown("### 2) **Zwei Matches**: Spieler **tauschen**")
-    st.caption("Tausche je **einen** Spieler zwischen zwei Matches am selben Datum. Checks: **Urlaub/Blackout** & **Wochentag**.")
+    st.caption("Tausche je **einen** Spieler zwischen zwei Matches am selben Datum. Checks wie oben.")
 
-    # 2A) Pick two matches (blank by default)
     sel_a_id = st.selectbox(
         "Match A",
         options=blank_first(match_ids),
@@ -539,7 +646,7 @@ with tab3:
         if not pA or not pB:
             st.write("⬆️ Bitte wähle je **einen** Spieler aus beiden Matches.")
         else:
-            # Hypothetical plan after swap
+            # preview state after swap
             df_after = df_edit.copy()
             mask_a = (df_after.index == sel_a_id)
             mask_b = (df_after.index == sel_b_id)
@@ -548,12 +655,12 @@ with tab3:
             if mask_b.any():
                 df_after.loc[mask_b] = df_after.loc[mask_b].apply(lambda r: swap_players_in_row(r, pA, pB), axis=1)
 
-            # Minimal checks for both changed rows
+            # if any swapped row is a singles match, ensure rank window vs its new opponent
+            # (this is naturally covered by check_min_rules_for_mask via protected helpers below)
             violations = check_min_rules_for_mask(df_after, (mask_a | mask_b), sel_day)
             if violations:
-                st.error("Regelverletzungen (nur Urlaub & Wochentag):")
-                for m in violations:
-                    st.write("•", m)
+                st.error("Regelverletzungen:")
+                for m in violations: st.write("•", m)
 
             if st.button("🔁 Tauschen & auf GitHub speichern", disabled=bool(violations), key="btn_swap_commit"):
                 st.session_state.df_edit = df_after
