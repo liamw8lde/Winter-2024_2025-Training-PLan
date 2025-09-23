@@ -1,17 +1,20 @@
 import streamlit as st
 import pandas as pd
 import re
-import base64, json, requests
+import base64, json, requests, io
 from datetime import date, datetime
 
 # -------------------- Basic config --------------------
 st.set_page_config(page_title="Wochenplan", layout="wide", initial_sidebar_state="collapsed")
 
-CSV_URL = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/Winterplan.csv"
+CSV_URL = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/Winterplan.csv"  # kept for reference only
 EDIT_PASSWORD = "tennis"  # protects only the "Plan bearbeiten" tab
 
-# -------------------- Reload helper --------------------
-def reload_from_source():
+# -------------------- Reload helpers --------------------
+def reload_from_source(force_branch: bool = True):
+    """Reload CSV via Contents API (by ref). If force_branch, jump to HEAD of branch."""
+    ref = st.secrets.get("GITHUB_BRANCH", "main") if force_branch else st.session_state.get("csv_ref")
+    st.session_state["csv_ref"] = ref
     st.cache_data.clear()
     st.session_state.pop("df_edit", None)
     st.session_state.pop("wk_idx", None)
@@ -53,10 +56,6 @@ def _postprocess(df: pd.DataFrame):
     df_exp = df.explode("Spieler_list").rename(columns={"Spieler_list": "Spieler_Name"})
     return df, df_exp
 
-@st.cache_data
-def load_csv(url: str):
-    return pd.read_csv(url, dtype=str).pipe(_postprocess)
-
 def week_key(df: pd.DataFrame):
     return df["Jahr"].astype(str) + "-W" + df["Woche"].astype(str).str.zfill(2)
 
@@ -72,24 +71,112 @@ def render_week(df: pd.DataFrame, year: int, week: int):
         for _, r in day_df.iterrows():
             st.markdown(f"- **{r['Slot']}** — *{r['Typ']}*  \n  {r['Spieler']}")
 
-# -------------------- Load data (read-only) --------------------
+# ==============================================================
+# =================== GitHub helpers (API) =====================
+# ==============================================================
+
+def _github_headers():
+    token = st.secrets.get("GITHUB_TOKEN")
+    if not token:
+        raise RuntimeError("GitHub token missing in st.secrets['GITHUB_TOKEN'].")
+    return {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+
+def _gh_repo_info():
+    repo   = st.secrets.get("GITHUB_REPO")            # e.g. "owner/repo"
+    branch = st.secrets.get("GITHUB_BRANCH", "main")   # e.g. "main"
+    path   = st.secrets.get("GITHUB_PATH", "Winterplan.csv")
+    if not repo:
+        raise RuntimeError("st.secrets['GITHUB_REPO'] must be set, e.g. 'owner/repo'.")
+    return repo, branch, path
+
+def github_get_file_sha(branch_override=None):
+    repo, branch, path = _gh_repo_info()
+    if branch_override: branch = branch_override
+    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    params = {"ref": branch}
+    r = requests.get(url, headers=_github_headers(), params=params, timeout=20)
+    if r.status_code == 200:
+        data = r.json()
+        return data.get("sha")
+    elif r.status_code == 404:
+        return None
+    else:
+        raise RuntimeError(f"GitHub GET failed {r.status_code}: {r.text}")
+
+def github_put_file(csv_bytes: bytes, message: str, branch_override=None):
+    repo, branch, path = _gh_repo_info()
+    if branch_override: branch = branch_override
+    sha = github_get_file_sha(branch)
+    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    payload = {
+        "message": message,
+        "content": base64.b64encode(csv_bytes).decode("utf-8"),
+        "branch": branch,
+        "committer": {
+            "name": st.secrets.get("GITHUB_COMMITTER_NAME", "Streamlit App"),
+            "email": st.secrets.get("GITHUB_COMMITTER_EMAIL", "no-reply@example.com"),
+        },
+    }
+    if sha:
+        payload["sha"] = sha
+    r = requests.put(url, headers=_github_headers(), data=json.dumps(payload), timeout=20)
+    if r.status_code in (200, 201):
+        return r.json()
+    raise RuntimeError(f"GitHub PUT failed {r.status_code}: {r.text}")
+
+def github_get_contents(ref: str | None = None):
+    """
+    Fetch CSV bytes + file SHA from GitHub Contents API for a given ref (branch or sha).
+    """
+    repo, branch, path = _gh_repo_info()
+    use_ref = ref or branch
+    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    params = {"ref": use_ref}
+    r = requests.get(url, headers=_github_headers(), params=params, timeout=20)
+    if r.status_code != 200:
+        raise RuntimeError(f"GitHub contents GET failed {r.status_code}: {r.text}")
+    data = r.json()
+    if "content" not in data:
+        raise RuntimeError("GitHub contents response missing 'content'.")
+    content_b64 = data["content"]
+    csv_bytes = base64.b64decode(content_b64)
+    sha = data.get("sha", "")
+    return csv_bytes, sha
+
+@st.cache_data(show_spinner=False)
+def load_csv_by_ref(ref: str):
+    """
+    Deterministic loader: given a ref (branch or sha), fetch file content and parse.
+    Cache key = ref (so switching to a new sha invalidates cache automatically).
+    """
+    csv_bytes, sha = github_get_contents(ref)
+    df_raw = pd.read_csv(io.BytesIO(csv_bytes), dtype=str)
+    df_pp, df_exp = _postprocess(df_raw)
+    return df_pp, df_exp, sha
+
+# -------------------- Load data (by ref/sha, not raw CDN) --------------------
+default_ref = st.secrets.get("GITHUB_BRANCH", "main")
+current_ref = st.session_state.get("csv_ref", default_ref)
 try:
-    df, df_exp = load_csv(CSV_URL)
+    df, df_exp, current_sha = load_csv_by_ref(current_ref)
+    st.session_state["csv_sha"] = current_sha
 except Exception as e:
-    st.error(f"Datenfehler beim Laden der CSV: {e}")
+    st.error(f"Datenfehler beim Laden der CSV aus GitHub: {e}")
     st.stop()
 
-# -------------------- Top reload button --------------------
-col_reload, _ = st.columns([1, 6])
+# -------------------- Top controls --------------------
+col_reload, col_ref = st.columns([1.5, 6])
 with col_reload:
-    if st.button("🔄 Daten neu laden", help="CSV neu laden & Cache leeren"):
-        reload_from_source()
+    if st.button("🔄 Daten neu laden (HEAD)", help="Neu laden direkt vom Branch-HEAD (ohne CDN-Lag)"):
+        reload_from_source(force_branch=True)
+with col_ref:
+    st.caption(f"Aktuelle CSV-Ref: `{st.session_state.get('csv_ref', default_ref)}` | SHA: `{st.session_state.get('csv_sha','')[:7]}`")
 
 # ==============================================================
 # =============== RULE SOURCES (HARD where stated) =============
 # ==============================================================
 
-# ---- Jotform weekday availability ----
+# ---- Jotform weekday availability (treated as HARD here) ----
 JOTFORM = {
     "Andreas Dank": {"Montag", "Mittwoch"},
     "Anke Ihde": {"Montag", "Mittwoch", "Donnerstag"},
@@ -306,59 +393,6 @@ def protected_player_violations(name: str, tag: str, s_time: str, typ: str,
     return v
 
 # ==============================================================
-# =================== GitHub commit helpers ====================
-# ==============================================================
-
-def _github_headers():
-    token = st.secrets.get("GITHUB_TOKEN")
-    if not token:
-        raise RuntimeError("GitHub token missing in st.secrets['GITHUB_TOKEN'].")
-    return {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
-
-def _gh_repo_info():
-    repo   = st.secrets.get("GITHUB_REPO")
-    branch = st.secrets.get("GITHUB_BRANCH", "main")
-    path   = st.secrets.get("GITHUB_PATH", "Winterplan.csv")
-    if not repo:
-        raise RuntimeError("st.secrets['GITHUB_REPO'] must be set, e.g. 'owner/repo'.")
-    return repo, branch, path
-
-def github_get_file_sha(branch_override=None):
-    repo, branch, path = _gh_repo_info()
-    if branch_override: branch = branch_override
-    url = f"https://api.github.com/repos/{repo}/contents/{path}"
-    params = {"ref": branch}
-    r = requests.get(url, headers=_github_headers(), params=params, timeout=20)
-    if r.status_code == 200:
-        data = r.json()
-        return data.get("sha")
-    elif r.status_code == 404:
-        return None
-    else:
-        raise RuntimeError(f"GET failed {r.status_code}: {r.text}")
-
-def github_put_file(csv_bytes: bytes, message: str, branch_override=None):
-    repo, branch, path = _gh_repo_info()
-    if branch_override: branch = branch_override
-    sha = github_get_file_sha(branch)
-    url = f"https://api.github.com/repos/{repo}/contents/{path}"
-    payload = {
-        "message": message,
-        "content": base64.b64encode(csv_bytes).decode("utf-8"),
-        "branch": branch,
-        "committer": {
-            "name": st.secrets.get("GITHUB_COMMITTER_NAME", "Streamlit App"),
-            "email": st.secrets.get("GITHUB_COMMITTER_EMAIL", "no-reply@example.com"),
-        },
-    }
-    if sha:
-        payload["sha"] = sha
-    r = requests.put(url, headers=_github_headers(), data=json.dumps(payload), timeout=20)
-    if r.status_code in (200, 201):
-        return r.json()
-    raise RuntimeError(f"PUT failed {r.status_code}: {r.text}")
-
-# ==============================================================
 # =========================  UI  ===============================
 # ==============================================================
 
@@ -449,7 +483,12 @@ def singles_opponent(row, out_player: str):
         return players[0]
     return None
 
+def week_of(d: date):
+    iso = pd.Timestamp(d).isocalendar()
+    return int(iso.year), int(iso.week)
+
 def _violations_if_added(df_plan: pd.DataFrame, name: str, tag: str, slot_time: str, slot_typ: str, d: date):
+    # Simulate counts after adding the player (for weekly caps/ratios in protected rules)
     y, w = week_of(d)
     virtual = pd.DataFrame([{
         "Tag": tag, "S_Time": slot_time, "Typ": slot_typ, "Spieler": name,
@@ -473,15 +512,25 @@ def eligible_replacements_all(df_plan: pd.DataFrame, tag: str, d: date, exclude:
     for name in all_players:
         if name in exclude:
             continue
-        wk = count_week(df_plan, name, d)
-        ssn = count_season(df_plan, name)
+        # metrics
+        y, w = week_of(d)
+        wk = df_plan[(df_plan["Jahr"] == y) & (df_plan["Woche"] == w)]
+        week_count = int(wk["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum())
+        season_count = int(df_plan["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum())
         rk = RANK.get(name, 999)
         viol = _violations_if_added(df_plan, name, tag, slot_time, slot_typ, d)
         if slot_typ.lower().startswith("einzel") and singles_vs:
             r1 = RANK.get(name); r2 = RANK.get(singles_vs)
             if r1 is None or r2 is None or abs(r1 - r2) > 2:
                 viol.append("Singles-Rangfenster verletzt (Δ>2)")
-        items.append({"name": name, "week": wk, "season": ssn, "rank": rk, "violations": sorted(set(viol))})
+        items.append({
+            "name": name,
+            "week": week_count,
+            "season": season_count,
+            "rank": rk,
+            "violations": sorted(set(viol))
+        })
+    # Least-used first, then week count, then rank, then name
     items.sort(key=lambda x: (x["season"], x["week"], x["rank"], x["name"]))
     return items
 
@@ -509,6 +558,7 @@ with tab3:
     if not check_edit_password():
         st.stop()
 
+    # Working copy for previews
     if "df_edit" not in st.session_state:
         st.session_state.df_edit = df.copy()
     df_edit = st.session_state.df_edit
@@ -520,6 +570,18 @@ with tab3:
         "Ersatzliste zeigt **alle** Spieler: **✅ legal** / **⛔ Verstoß** (Override nötig)."
     )
 
+    # Export (for ChatGPT / backup)
+    with st.expander("📤 Plan exportieren (CSV/JSON)"):
+        export_df = st.session_state.get("df_edit", df)[["Datum","Tag","Slot","Typ","Spieler"]]
+        csv_text = export_df.to_csv(index=False)
+        st.download_button("CSV herunterladen", data=csv_text.encode("utf-8"),
+                           file_name="Winterplan.csv", mime="text/csv")
+        st.text_area("CSV (kopieren & in ChatGPT einfügen)", csv_text, height=200)
+        json_text = export_df.to_dict(orient="records")
+        st.download_button("JSON herunterladen", data=json.dumps(json_text, ensure_ascii=False, indent=2).encode("utf-8"),
+                           file_name="Winterplan.json", mime="application/json")
+
+    # ----- Date selection -----
     valid_days = sorted(df_edit["Datum_dt"].dropna().dt.date.unique())
     if not valid_days:
         st.warning("Keine Daten vorhanden."); st.stop()
@@ -529,6 +591,7 @@ with tab3:
     if day_df.empty:
         st.info("Für dieses Datum gibt es keine Einträge."); st.stop()
 
+    # Keep original index as RowID
     day_df = day_df.copy()
     day_df["RowID"] = day_df.index
     day_df["Label"] = day_df.apply(lambda r: f"{r['Slot']} — {r['Typ']} — {r['Spieler']}", axis=1)
@@ -536,7 +599,7 @@ with tab3:
 
     # ================= 1) REPLACE =================
     st.markdown("### 1) Spieler **ersetzen** (ein Match → anderer Spieler)")
-    st.caption("Sortierung in der Liste: **Saison** ↑, **Woche** ↑, **Rang** ↑. **⛔** zeigt konkrete Gründe im Expander.")
+    st.caption("Sortierung: **Saison** ↑, **Woche** ↑, **Rang** ↑. **⛔** zeigt Gründe im Expander.")
 
     match_ids = [int(x) for x in day_df["RowID"].tolist()]
     sel_match_id = st.selectbox(
@@ -563,7 +626,7 @@ with tab3:
             st.write("⬆️ Bitte wähle den zu ersetzenden Spieler.")
         else:
             singles_vs = singles_opponent(sel_row, out_choice)
-            exclusions = set(current_players)
+            exclusions = set(current_players)  # exclude only current match members
             candidates = eligible_replacements_all(
                 df_edit, sel_row["Tag"], sel_day, exclusions,
                 slot_time=str(sel_row["S_Time"]), slot_typ=str(sel_row["Typ"]),
@@ -591,6 +654,7 @@ with tab3:
             if repl_choice == "":
                 st.write("⬆️ Bitte wähle einen Ersatzspieler.")
             else:
+                # preview after replace
                 df_after = df_edit.copy()
                 mask_row = (df_after.index == sel_match_id)
                 if mask_row.any():
@@ -598,8 +662,10 @@ with tab3:
                         lambda r: replace_player_in_row(r, out_choice, repl_choice), axis=1
                     )
 
+                # authoritative violations for changed row
                 violations = check_min_rules_for_mask(df_after, mask_row, sel_day)
 
+                # candidate-specific reasons (simulated add)
                 cand_viol = name_to_item[repl_choice]["violations"]
                 if cand_viol:
                     with st.expander("Hinweise zum gewählten Ersatz (Slot-spezifisch)"):
@@ -624,9 +690,13 @@ with tab3:
                         to_save = st.session_state.df_edit[["Datum","Tag","Slot","Typ","Spieler"]]
                         csv_bytes = to_save.to_csv(index=False).encode("utf-8")
                         msg = f"Replace {out_choice} → {repl_choice} on {sel_day} ({sel_row['Slot']}) {(' | override: ' + reason) if reason else ''}"
-                        github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
+                        res = github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
+                        new_sha = (res.get("content") or {}).get("sha") or (res.get("commit") or {}).get("sha")
+                        if new_sha:
+                            st.session_state["csv_ref"] = new_sha  # pin to exact saved version
                         st.success("Gespeichert ✅")
-                        reload_from_source()  # show updates immediately
+                        st.cache_data.clear()
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Speichern fehlgeschlagen: {e}")
 
@@ -690,9 +760,13 @@ with tab3:
                     to_save = st.session_state.df_edit[["Datum","Tag","Slot","Typ","Spieler"]]
                     csv_bytes = to_save.to_csv(index=False).encode("utf-8")
                     msg = f"Swap {pA} ↔ {pB} on {sel_day} {(' | override: ' + reason_swap) if reason_swap else ''}"
-                    github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
+                    res = github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
+                    new_sha = (res.get("content") or {}).get("sha") or (res.get("commit") or {}).get("sha")
+                    if new_sha:
+                        st.session_state["csv_ref"] = new_sha
                     st.success("Gespeichert ✅")
-                    reload_from_source()  # show updates immediately
+                    st.cache_data.clear()
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Speichern fehlgeschlagen: {e}")
 
