@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 import base64, json, requests, io
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 # -------------------- Basic config --------------------
 st.set_page_config(page_title="Wochenplan", layout="wide", initial_sidebar_state="collapsed")
@@ -41,9 +41,9 @@ def _postprocess(df: pd.DataFrame):
 
     # Extract from Slot like "D20:00-120 PLA"
     t = df["Slot"].str.extract(r"^([ED])(\d{2}:\d{2})-([0-9]+)\s+PL([AB])$")
-    df["S_Art"]   = t[0].fillna("")
+    df["S_Art"]   = t[0].fillna("")      # E/D (Einzel/Doppel)
     df["S_Time"]  = t[1].fillna("00:00")
-    df["S_Dur"]   = t[2].fillna("0")
+    df["S_Dur"]   = t[2].fillna("0")     # minutes as string
     df["S_Court"] = t[3].fillna("")
 
     df["Startzeit_sort"] = pd.to_datetime(df["S_Time"], format="%H:%M", errors="coerce").dt.time
@@ -424,10 +424,197 @@ def protected_player_violations(name: str, tag: str, s_time: str, typ: str,
     return v
 
 # ==============================================================
+# =========== COSTS: court rates + allowed weekly slots =========
+# ==============================================================
+
+COURT_RATE_PER_HOUR = 17.50  # €
+# Allowed weekly slots (strict) with human 'Typ'
+ALLOWED_SLOTS = {
+    "Montag": [
+        ("D20:00-120 PLA", "Doppel"),
+        ("D20:00-120 PLB", "Doppel"),
+    ],
+    "Mittwoch": [
+        ("E18:00-60 PLA",  "Einzel"),
+        ("E19:00-60 PLA",  "Einzel"),
+        ("E19:00-60 PLB",  "Einzel"),
+        ("D20:00-90 PLA",  "Doppel"),
+        ("D20:00-90 PLB",  "Doppel"),
+    ],
+    "Donnerstag": [
+        ("E20:00-90 PLA",  "Einzel"),
+        ("E20:00-90 PLB",  "Einzel"),
+    ],
+}
+# Map German weekday -> ISO weekday index (Mon=1 ... Sun=7 for isocalendar)
+WEEKDAY_TO_ISO = {"Montag": 1, "Mittwoch": 3, "Donnerstag": 4}
+
+def _minutes_from_slot(slot: str) -> int:
+    # e.g. "D20:00-120 PLA" -> 120
+    m = re.search(r"-([0-9]+)\s+PL[AB]$", str(slot))
+    return int(m.group(1)) if m else 0
+
+def _players_per_slot(s_art: str, fallback_players_count: int | None = None, slot_typ_text: str = "") -> int:
+    # Prefer E/D code; fall back to text; then to passed count
+    if s_art == "E":
+        return 2
+    if s_art == "D":
+        return 4
+    if slot_typ_text.lower().startswith("einzel"):
+        return 2
+    if slot_typ_text.lower().startswith("doppel"):
+        return 4
+    return max(1, fallback_players_count or 2)
+
+def _season_bounds_from_df(df: pd.DataFrame):
+    dmin = pd.to_datetime(df["Datum_dt"]).dropna().min()
+    dmax = pd.to_datetime(df["Datum_dt"]).dropna().max()
+    if pd.isna(dmin) or pd.isna(dmax):
+        return None, None
+    return dmin.date(), dmax.date()
+
+def _dates_for_iso_week(iso_year: int, iso_week: int, iso_weekday: int):
+    # returns date for given ISO (year, week, weekday 1..7)
+    return pd.Timestamp.fromisocalendar(iso_year, iso_week, iso_weekday).date()
+
+def _generate_allowed_slots_calendar(df: pd.DataFrame):
+    """Return list of dicts with Date, Tag, Slot, Typ, Minutes for every allowed weekly slot within season bounds."""
+    start_date, end_date = _season_bounds_from_df(df)
+    if not start_date or not end_date:
+        return []
+
+    # compute inclusive range of (year, week)
+    start_iso = pd.Timestamp(start_date).isocalendar()
+    end_iso   = pd.Timestamp(end_date).isocalendar()
+    start_key = (int(start_iso.year), int(start_iso.week))
+    end_key   = (int(end_iso.year), int(end_iso.week))
+
+    def week_iter(yw_start, yw_end):
+        y, w = yw_start
+        y_end, w_end = yw_end
+        while (y < y_end) or (y == y_end and w <= w_end):
+            yield y, w
+            # increment ISO week
+            if w == pd.Timestamp.fromisocalendar(y, 52, 1).isocalendar().week and \
+               pd.Timestamp.fromisocalendar(y, 12, 1).isocalendar().week == 53:
+                maxw = 53
+            else:
+                # get number of weeks in ISO year y
+                maxw = pd.Timestamp.fromisocalendar(y, 12, 28).isocalendar().week
+            if w < maxw:
+                w += 1
+            else:
+                w = 1
+                y += 1
+
+    out = []
+    for y, w in week_iter(start_key, end_key):
+        for tag, slot_list in ALLOWED_SLOTS.items():
+            iso_wd = WEEKDAY_TO_ISO[tag]
+            dt = _dates_for_iso_week(y, w, iso_wd)
+            if dt < start_date or dt > end_date:
+                continue
+            for slot_code, typ_text in slot_list:
+                out.append({
+                    "Datum": dt,
+                    "Tag": tag,
+                    "Slot": slot_code,
+                    "Typ": typ_text,
+                    "Minutes": _minutes_from_slot(slot_code),
+                })
+    return out
+
+def _is_blackout(d: date) -> bool:
+    return (d.month, d.day) in BLACKOUT_MMDD
+
+def compute_player_costs(df: pd.DataFrame, df_exp: pd.DataFrame):
+    """
+    Returns:
+      per_player_df (Name, minutes, direct_cost, unused_share, total) rounded,
+      totals_dict for UI, and the full breakdown tables if needed
+    """
+    # 1) Direct costs from used rows
+    used = df.copy()
+    used["Minutes"] = pd.to_numeric(used["S_Dur"], errors="coerce").fillna(0).astype(int)
+    used["players_in_slot"] = used.apply(
+        lambda r: _players_per_slot(r["S_Art"], fallback_players_count=len(r["Spieler_list"]), slot_typ_text=r["Typ"]),
+        axis=1
+    )
+    used["court_cost"] = used["Minutes"] / 60.0 * COURT_RATE_PER_HOUR
+    used["per_player_cost"] = used["court_cost"] / used["players_in_slot"]
+
+    # per-player minutes and direct costs
+    per_player_minutes = df_exp.groupby("Spieler_Name")["Datum"].count() * 0  # init
+    # minutes: explode df across players with the minutes per row / players_in_slot? No, minutes per player = slot Minutes (not divided).
+    # We distribute unused by total minutes actually played (full minutes per player appearance).
+    exploded = df_exp.merge(used[["Datum", "Tag", "Slot", "Minutes", "players_in_slot"]], left_on=["Datum", "Tag", "Slot"], right_on=["Datum", "Tag", "Slot"], how="left")
+    exploded["Minutes"].fillna(0, inplace=True)
+    # Each player's minutes for a slot = full slot minutes (not divided)
+    per_player_minutes = exploded.groupby("Spieler_Name")["Minutes"].sum()
+
+    # direct cost per player: sum of per_player_cost for each slot they appear in
+    used_cost_per_row = used[["Datum", "Tag", "Slot", "per_player_cost"]]
+    exploded_cost = df_exp.merge(used_cost_per_row, on=["Datum", "Tag", "Slot"], how="left")
+    exploded_cost["per_player_cost"].fillna(0.0, inplace=True)
+    per_player_direct = exploded_cost.groupby("Spieler_Name")["per_player_cost"].sum()
+
+    # Ensure all players present
+    all_players = sorted(p for p in df_exp["Spieler_Name"].dropna().unique().tolist() if str(p).strip())
+    minutes_series = per_player_minutes.reindex(all_players, fill_value=0)
+    direct_series  = per_player_direct.reindex(all_players,  fill_value=0.0)
+
+    # 2) Unused court costs
+    allowed_calendar = pd.DataFrame(_generate_allowed_slots_calendar(df))
+    if allowed_calendar.empty:
+        total_unused_cost = 0.0
+    else:
+        # Mark which allowed (date,slot) pairs are present in used df
+        used_pairs = set(zip(pd.to_datetime(df["Datum_dt"]).dt.date, df["Slot"]))
+        allowed_calendar["is_used"] = allowed_calendar.apply(
+            lambda r: (r["Datum"], r["Slot"]) in used_pairs, axis=1
+        )
+        # Unused = not used (including blackout dates — which will be among allowed dates naturally)
+        allowed_calendar["court_cost"] = allowed_calendar["Minutes"] / 60.0 * COURT_RATE_PER_HOUR
+        total_unused_cost = float(allowed_calendar.loc[~allowed_calendar["is_used"], "court_cost"].sum())
+
+    # 3) Distribute unused cost by total minutes played
+    total_minutes_all = float(minutes_series.sum())
+    if total_minutes_all > 0:
+        unused_share = minutes_series.astype(float) / total_minutes_all * total_unused_cost
+    else:
+        # No one played; no distribution
+        unused_share = minutes_series.astype(float) * 0.0
+
+    # 4) Assemble per-player table
+    per_player = pd.DataFrame({
+        "Spieler": minutes_series.index,
+        "Minuten": minutes_series.values.astype(int),
+        "Direkte Kosten (€)": direct_series.values.astype(float),
+        "Anteil ungenutzte Plätze (€)": unused_share.values.astype(float),
+    })
+    per_player["Gesamt (€)"] = per_player["Direkte Kosten (€)"] + per_player["Anteil ungenutzte Plätze (€)"]
+
+    # Round for display
+    per_player["Direkte Kosten (€)"] = per_player["Direkte Kosten (€)"].round(2)
+    per_player["Anteil ungenutzte Plätze (€)"] = per_player["Anteil ungenutzte Plätze (€)"].round(2)
+    per_player["Gesamt (€)"] = per_player["Gesamt (€)"].round(2)
+
+    # Totals for UI
+    total_direct = float(per_player["Direkte Kosten (€)"].sum())
+    total_charged = float(per_player["Gesamt (€)"].sum())
+
+    totals = {
+        "unused_cost_total": round(total_unused_cost, 2),
+        "direct_cost_total": round(total_direct, 2),
+        "charged_total": round(total_charged, 2),
+    }
+    return per_player.sort_values(["Gesamt (€)", "Spieler"]), totals, allowed_calendar
+
+# ==============================================================
 # =========================  UI  ===============================
 # ==============================================================
 
-tab1, tab2, tab3 = st.tabs(["Wochenplan", "Spieler-Matches", "Plan bearbeiten"])
+tab1, tab2, tab3, tab4 = st.tabs(["Wochenplan", "Spieler-Matches", "Plan bearbeiten", "Spieler-Kosten"])
 
 with tab1:
     weeks_df = (
@@ -582,12 +769,10 @@ def check_edit_password() -> bool:
 
 # Helper: set ref after save (use COMMIT sha only)
 def _set_ref_after_save(res: dict):
-    # Use commit sha (valid ref for Contents API). Do NOT use content.sha (blob sha).
     new_ref = (res.get("commit") or {}).get("sha")
     if new_ref:
         st.session_state["csv_ref"] = new_ref
     else:
-        # fallback: stick to branch HEAD on next reload
         st.session_state["csv_ref"] = st.secrets.get("GITHUB_BRANCH", "main")
 
 with tab3:
@@ -728,7 +913,6 @@ with tab3:
                         csv_bytes = to_save.to_csv(index=False).encode("utf-8")
                         msg = f"Replace {out_choice} → {repl_choice} on {sel_day} ({sel_row['Slot']}) {(' | override: ' + reason) if reason else ''}"
                         res = github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
-                        # set commit SHA as ref and reload
                         new_ref = (res.get("commit") or {}).get("sha")
                         st.session_state["csv_ref"] = new_ref or st.secrets.get("GITHUB_BRANCH", "main")
                         st.success("Gespeichert ✅")
@@ -817,3 +1001,36 @@ with tab3:
     if st.button("↩️ Änderungen verwerfen (Reset)"):
         st.session_state.df_edit = df.copy()
         st.rerun()
+
+# ============================ TAB 4: KOSTEN ============================
+with tab4:
+    st.header("Spieler-Kosten (Saison)")
+    st.caption("Gerichtsgebühr: **17,50 €/h**. Einzel = 2 Spieler, Doppel = 4 Spieler. "
+               "Ungenutzte Slots (auch an 24.12/25.12/31.12) werden proportional zu den **gespielten Minuten** verteilt.")
+
+    per_player_df, totals, allowed_calendar = compute_player_costs(df, df_exp)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Summe direkte Kosten", f"{totals['direct_cost_total']:.2f} €")
+    c2.metric("Summe ungenutzte Plätze", f"{totals['unused_cost_total']:.2f} €")
+    c3.metric("Gesamt verrechnet", f"{totals['charged_total']:.2f} €")
+
+    st.subheader("Kosten pro Spieler (Saison)")
+    st.dataframe(per_player_df, width="stretch")
+
+    # Downloads
+    st.download_button(
+        "CSV herunterladen (Spieler-Kosten)",
+        data=per_player_df.to_csv(index=False).encode("utf-8"),
+        file_name="spieler_kosten.csv",
+        mime="text/csv"
+    )
+
+    with st.expander("Details: Kalender der erlaubten Slots (genutzt/ungenutzt)"):
+        if isinstance(allowed_calendar, pd.DataFrame) and not allowed_calendar.empty:
+            show_df = allowed_calendar.copy()
+            show_df["Datum"] = pd.to_datetime(show_df["Datum"]).dt.strftime("%Y-%m-%d")
+            show_df["court_cost"] = show_df["court_cost"].round(2)
+            st.dataframe(show_df.sort_values(["Datum", "Tag", "Slot"]), width="stretch")
+        else:
+            st.info("Kein Slot-Kalender generiert (fehlende Saisondaten).")
