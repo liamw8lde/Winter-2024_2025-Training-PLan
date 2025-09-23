@@ -7,7 +7,6 @@ from datetime import date, datetime
 # -------------------- Basic config --------------------
 st.set_page_config(page_title="Wochenplan", layout="wide", initial_sidebar_state="collapsed")
 
-CSV_URL = "https://raw.githubusercontent.com/liamw8lde/Winter-2024_2025-Training-PLan/main/Winterplan.csv"  # kept for reference only
 EDIT_PASSWORD = "tennis"  # protects only the "Plan bearbeiten" tab
 
 # -------------------- Reload helpers --------------------
@@ -126,7 +125,7 @@ def github_put_file(csv_bytes: bytes, message: str, branch_override=None):
 
 def github_get_contents(ref: str | None = None):
     """
-    Fetch CSV bytes + file SHA from GitHub Contents API for a given ref (branch or sha).
+    Fetch CSV bytes + file SHA from GitHub Contents API for a given ref (branch or commit sha).
     """
     repo, branch, path = _gh_repo_info()
     use_ref = ref or branch
@@ -146,23 +145,39 @@ def github_get_contents(ref: str | None = None):
 @st.cache_data(show_spinner=False)
 def load_csv_by_ref(ref: str):
     """
-    Deterministic loader: given a ref (branch or sha), fetch file content and parse.
-    Cache key = ref (so switching to a new sha invalidates cache automatically).
+    Deterministic loader: given a ref (branch or commit sha), fetch and parse.
+    Cache key = ref.
     """
     csv_bytes, sha = github_get_contents(ref)
     df_raw = pd.read_csv(io.BytesIO(csv_bytes), dtype=str)
     df_pp, df_exp = _postprocess(df_raw)
     return df_pp, df_exp, sha
 
+def _safe_load_by_ref_with_fallback(ref: str, branch: str):
+    """Try the requested ref once; on failure, fall back to branch HEAD and warn."""
+    try:
+        return load_csv_by_ref(ref), None
+    except Exception as e:
+        if ref != branch:
+            try:
+                data = load_csv_by_ref(branch)
+                return data, f"Ref `{ref}` fehlgeschlagen, auf `{branch}` (HEAD) zurückgefallen."
+            except Exception as e2:
+                return None, f"Laden fehlgeschlagen: ref `{ref}` und Branch `{branch}`. Fehler: {e2}"
+        return None, f"Laden fehlgeschlagen für ref `{ref}`. Fehler: {e}"
+
 # -------------------- Load data (by ref/sha, not raw CDN) --------------------
 default_ref = st.secrets.get("GITHUB_BRANCH", "main")
 current_ref = st.session_state.get("csv_ref", default_ref)
-try:
-    df, df_exp, current_sha = load_csv_by_ref(current_ref)
-    st.session_state["csv_sha"] = current_sha
-except Exception as e:
-    st.error(f"Datenfehler beim Laden der CSV aus GitHub: {e}")
+
+data_tuple, warn = _safe_load_by_ref_with_fallback(current_ref, default_ref)
+if data_tuple is None:
+    st.error(warn or "Unbekannter Ladefehler.")
     st.stop()
+(df, df_exp, current_sha), _ = data_tuple
+st.session_state["csv_sha"] = current_sha
+if warn:
+    st.warning(warn)
 
 # -------------------- Top controls --------------------
 col_reload, col_ref = st.columns([1.5, 6])
@@ -240,56 +255,7 @@ BLACKOUT_MMDD = {(12, 24), (12, 25), (12, 31)}
 
 # ---- Holidays list ----
 RAW_HOLIDAYS = """
-Andreas Dank: 2015-12-24 → 2015-12-26; 2015-12-31 → 2016-01-01.
-Anke Ihde: 2025-09-25.
-Arndt Stueber: 2025-10-16 → 2025-11-03; 2025-11-13 → 2025-11-24; 2025-12-11 → 2025-12-31.
-Bernd Robioneck: 2025-12-01 → 2025-12-08; 2025-12-22 → 2026-01-04.
-Bernd Sotzek: 2025-01-01 → 2026-01-04.
-Bjoern: 2025-10-25; 2025-10-31; 2025-12-20; 2025-12-31.
-Bjoern Junker: 2025-10-25 → 2025-10-31; 2025-12-20 → 2025-12-31.
-Carsten Gambal: 2025-09-29 → 2025-10-10; 2025-11-12 → 2025-11-13; 2025-12-24 → 2026-01-01.
-Dirk Kistner: 2025-09-18 → 2025-09-22; 2025-10-02; 2025-10-30; 2025-12-22 → 2025-12-31.
-Frank Koller: 2025-10-10 → 2025-10-31; 2025-12-18 → 2026-01-05.
-Frank Petermann: 2025-09-08 → 2025-09-14; 2025-10-13 → 2025-10-25; 2025-12-01 → 2025-12-07; 2025-12-24; 2025-12-31.
-Gunnar Brix: 2025-09-01 → 2025-09-26; 2025-10-06 → 2025-10-11; 2025-10-20 → 2025-10-25; 2025-11-17 → 2025-11-22; 2025-12-22 → 2025-12-31.
-Heiko Thomsen: 2025-09-15 → 2025-10-10; 2025-11-12; 2025-12-03; 2025-12-17; 2025-12-22 → 2025-12-26; 2025-12-31.
-Jan Pappenheim: 
-Jens Hafner: 2025-10-23 → 2025-11-02; 2025-12-24 → 2025-12-26.
-Jens Krause: 2025-09-24 → 2025-09-24.
-Joerg: 2025-12-22; 2026-01-02.
-Joerg Peters: 2025-12-22 → 2026-01-02.
-Juergen: 2025-12-22; 2026-01-04.
-Juergen Hansen: 2025-12-22 → 2026-01-04.
-Kai Schroeder: 2025-10-06 → 2025-10-12; 2025-12-01 → 2025-12-06; 2025-12-22 → 2025-12-27; 2026-01-19 → 2026-01-31.
-Karsten: 2025-11-12 → 2025-11-13; 2025-12-24; 2025-12-29.
-Karsten Usinger: 2025-09-01 → 2025-11-03; 2025-12-22 → 2025-12-29; 2025-12-31.
-Kerstin Baarck: 2025-09-01 → 2025-10-31.
-Lars Staubermann: 2025-10-06 → 2025-10-26; 2026-03-23 → 2026-04-12.
-Lena Meiss: 2025-01-01 → 2025-09-20; 2025-10-01 → 2025-10-31.
-Liam Wilde: 2025-12-24.
-Lorenz Kramp: 2025-10-04 → 2025-10-24.
-Manfred Grell: 2025-09-22; 2025-10-06.
-Markus Muench: 2025-10-13 → 2025-10-19; 2025-12-22 → 2026-01-04.
-Martin Lange: 2025-12-22 → 2026-01-04.
-Martina Schmidt: 2025-11-08 → 2025-11-22; 2026-01-01.
-Matthias Duddek: 2025-11-04 → 2025-11-10; 2025-12-24 → 2025-12-31.
-Meiss: 2025-01-01 → 2025-09-20.
-Michael Bock: 2025-12-20 → 2026-01-04.
-Michael Rabehl: 2025-10-09 → 2025-10-12.
-Mohamad Albadry: 
-Muench: 2025-10-13; 2025-10-19; 2025-12-22; 2026-01-04.
-Oliver Boess: 2025-09-01 → 2025-09-30; 2025-12-01 → 2025-12-07; 2025-12-24 → 2025-12-25.
-Patrick Buehrsch: 2025-11-01 → 2025-11-30.
-Peter Plaehn: 
-Ralf Colditz: 2025-09-08 → 2025-09-30; 2025-12-22 → 2026-01-03.
-Schroeder: 2025-10-06; 2025-10-12; 2025-12-01; 2025-12-06; 2025-12-22; 2025-12-27.
-Sebastian Braune: 2025-10-20 → 2025-10-30; 2025-12-28 → 2026-01-06.
-Stueber: 2025-10-16; 2025-10-31; 2025-11-17; 2025-11-23; 2025-12-15; 2025-12-31.
-Thomas Bretschneider: 
-Thomas Grueneberg: 
-Tobias Kahl: 2025-09-01 → 2025-09-14; 2025-09-23 → 2025-10-09; 2025-10-20 → 2025-10-31; 2025-12-22 → 2025-12-31.
-Torsten Bartel: 2025-09-15 → 2025-09-24; 2025-09-29 → 2025-10-15; 2025-10-20 → 2025-10-23; 2025-10-29 → 2025-11-19; 2025-11-24 → 2025-12-17; 2025-12-22 → 2025-12-25.
-Wolfgang Aleksik: 2025-09-01 → 2025-09-16; 2025-09-18 → 2025-10-14; 2025-10-16 → 2025-10-21; 2025-10-23 → 2025-11-04; 2025-11-06 → 2025-11-11; 2025-11-13 → 2025-11-25; 2025-11-27 → 2025-12-09; 2025-12-11 → 2025-12-31.
+... (omitted here for brevity; keep your full RAW_HOLIDAYS block unchanged) ...
 """
 
 def parse_holidays(raw: str):
@@ -483,10 +449,6 @@ def singles_opponent(row, out_player: str):
         return players[0]
     return None
 
-def week_of(d: date):
-    iso = pd.Timestamp(d).isocalendar()
-    return int(iso.year), int(iso.week)
-
 def _violations_if_added(df_plan: pd.DataFrame, name: str, tag: str, slot_time: str, slot_typ: str, d: date):
     # Simulate counts after adding the player (for weekly caps/ratios in protected rules)
     y, w = week_of(d)
@@ -552,6 +514,16 @@ def check_edit_password() -> bool:
         else:
             st.error("Falsches Passwort.")
     return st.session_state.get("edit_ok", False)
+
+# Helper: set ref after save (use COMMIT sha only)
+def _set_ref_after_save(res: dict):
+    # Use commit sha (valid ref for Contents API). Do NOT use content.sha (blob sha).
+    new_ref = (res.get("commit") or {}).get("sha")
+    if new_ref:
+        st.session_state["csv_ref"] = new_ref
+    else:
+        # fallback: stick to branch HEAD on next reload
+        st.session_state["csv_ref"] = st.secrets.get("GITHUB_BRANCH", "main")
 
 with tab3:
     st.header("Plan bearbeiten – geschützter Bereich")
@@ -625,6 +597,13 @@ with tab3:
         if out_choice == "":
             st.write("⬆️ Bitte wähle den zu ersetzenden Spieler.")
         else:
+            # Candidate pool (all players, show legal/violations)
+            def singles_opponent(row, out_player: str):
+                players = [p for p in split_players(row["Spieler"]) if p != out_player]
+                if row["Typ"].lower().startswith("einzel") and len(players) == 1:
+                    return players[0]
+                return None
+
             singles_vs = singles_opponent(sel_row, out_choice)
             exclusions = set(current_players)  # exclude only current match members
             candidates = eligible_replacements_all(
@@ -691,9 +670,7 @@ with tab3:
                         csv_bytes = to_save.to_csv(index=False).encode("utf-8")
                         msg = f"Replace {out_choice} → {repl_choice} on {sel_day} ({sel_row['Slot']}) {(' | override: ' + reason) if reason else ''}"
                         res = github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
-                        new_sha = (res.get("content") or {}).get("sha") or (res.get("commit") or {}).get("sha")
-                        if new_sha:
-                            st.session_state["csv_ref"] = new_sha  # pin to exact saved version
+                        _set_ref_after_save(res)  # <<< use commit sha only
                         st.success("Gespeichert ✅")
                         st.cache_data.clear()
                         st.rerun()
@@ -761,9 +738,7 @@ with tab3:
                     csv_bytes = to_save.to_csv(index=False).encode("utf-8")
                     msg = f"Swap {pA} ↔ {pB} on {sel_day} {(' | override: ' + reason_swap) if reason_swap else ''}"
                     res = github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
-                    new_sha = (res.get("content") or {}).get("sha") or (res.get("commit") or {}).get("sha")
-                    if new_sha:
-                        st.session_state["csv_ref"] = new_sha
+                    _set_ref_after_save(res)  # <<< use commit sha only
                     st.success("Gespeichert ✅")
                     st.cache_data.clear()
                     st.rerun()
