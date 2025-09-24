@@ -133,7 +133,7 @@ with st.form("player_input"):
     ranges_df = st.data_editor(
         st.session_state["ranges_df"],
         num_rows="dynamic",
-        columns={
+        column_config={
             "von": st.column_config.DateColumn("von", min_value=WINDOW_START, max_value=WINDOW_END),
             "bis": st.column_config.DateColumn("bis", min_value=WINDOW_START, max_value=WINDOW_END),
         },
