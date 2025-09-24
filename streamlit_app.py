@@ -477,6 +477,8 @@ def _dates_for_iso_week(iso_year: int, iso_week: int, iso_weekday: int):
     # returns date for given ISO (year, week, weekday 1..7)
     return pd.Timestamp.fromisocalendar(iso_year, iso_week, iso_weekday).date()
 
+from datetime import date as _date
+
 def _generate_allowed_slots_calendar(df: pd.DataFrame):
     """Return list of dicts with Date, Tag, Slot, Typ, Minutes for every allowed weekly slot within season bounds."""
     start_date, end_date = _season_bounds_from_df(df)
@@ -490,22 +492,20 @@ def _generate_allowed_slots_calendar(df: pd.DataFrame):
     end_key   = (int(end_iso.year), int(end_iso.week))
 
     def week_iter(yw_start, yw_end):
+        """Yield successive (iso_year, iso_week) from start to end inclusive."""
         y, w = yw_start
         y_end, w_end = yw_end
-        while (y < y_end) or (y == y_end and w <= w_end):
+        while True:
             yield y, w
-            # increment ISO week
-            if w == pd.Timestamp.fromisocalendar(y, 52, 1).isocalendar().week and \
-               pd.Timestamp.fromisocalendar(y, 12, 1).isocalendar().week == 53:
-                maxw = 53
-            else:
-                # get number of weeks in ISO year y
-                maxw = pd.Timestamp.fromisocalendar(y, 12, 28).isocalendar().week
+            if (y, w) == (y_end, w_end):
+                break
+            # number of ISO weeks in year y = week-number of Dec 28th (a guaranteed ISO week in that year)
+            maxw = _date(y, 12, 28).isocalendar().week
             if w < maxw:
                 w += 1
             else:
-                w = 1
                 y += 1
+                w = 1
 
     out = []
     for y, w in week_iter(start_key, end_key):
@@ -544,18 +544,19 @@ def compute_player_costs(df: pd.DataFrame, df_exp: pd.DataFrame):
     used["per_player_cost"] = used["court_cost"] / used["players_in_slot"]
 
     # per-player minutes and direct costs
-    per_player_minutes = df_exp.groupby("Spieler_Name")["Datum"].count() * 0  # init
-    # minutes: explode df across players with the minutes per row / players_in_slot? No, minutes per player = slot Minutes (not divided).
-    # We distribute unused by total minutes actually played (full minutes per player appearance).
-    exploded = df_exp.merge(used[["Datum", "Tag", "Slot", "Minutes", "players_in_slot"]], left_on=["Datum", "Tag", "Slot"], right_on=["Datum", "Tag", "Slot"], how="left")
-    exploded["Minutes"].fillna(0, inplace=True)
+    exploded = df_exp.merge(
+        used[["Datum", "Tag", "Slot", "Minutes", "players_in_slot"]],
+        left_on=["Datum", "Tag", "Slot"],
+        right_on=["Datum", "Tag", "Slot"],
+        how="left"
+    )
+    exploded["Minutes"] = exploded["Minutes"].fillna(0)
     # Each player's minutes for a slot = full slot minutes (not divided)
     per_player_minutes = exploded.groupby("Spieler_Name")["Minutes"].sum()
 
-    # direct cost per player: sum of per_player_cost for each slot they appear in
     used_cost_per_row = used[["Datum", "Tag", "Slot", "per_player_cost"]]
     exploded_cost = df_exp.merge(used_cost_per_row, on=["Datum", "Tag", "Slot"], how="left")
-    exploded_cost["per_player_cost"].fillna(0.0, inplace=True)
+    exploded_cost["per_player_cost"] = exploded_cost["per_player_cost"].fillna(0.0)
     per_player_direct = exploded_cost.groupby("Spieler_Name")["per_player_cost"].sum()
 
     # Ensure all players present
@@ -573,7 +574,6 @@ def compute_player_costs(df: pd.DataFrame, df_exp: pd.DataFrame):
         allowed_calendar["is_used"] = allowed_calendar.apply(
             lambda r: (r["Datum"], r["Slot"]) in used_pairs, axis=1
         )
-        # Unused = not used (including blackout dates — which will be among allowed dates naturally)
         allowed_calendar["court_cost"] = allowed_calendar["Minutes"] / 60.0 * COURT_RATE_PER_HOUR
         total_unused_cost = float(allowed_calendar.loc[~allowed_calendar["is_used"], "court_cost"].sum())
 
@@ -582,7 +582,6 @@ def compute_player_costs(df: pd.DataFrame, df_exp: pd.DataFrame):
     if total_minutes_all > 0:
         unused_share = minutes_series.astype(float) / total_minutes_all * total_unused_cost
     else:
-        # No one played; no distribution
         unused_share = minutes_series.astype(float) * 0.0
 
     # 4) Assemble per-player table
