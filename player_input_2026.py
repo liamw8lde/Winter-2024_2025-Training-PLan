@@ -102,17 +102,19 @@ st.caption("Bitte gib deine Verfügbarkeit, Urlaubszeiträume/Einzeltage, Präfe
            "Am Ende siehst du eine Zusammenfassung – erst **Bestätigen & Speichern** sichert deine Eingaben.")
 
 existing_players = load_names_from_plan()
-player_options = ["— bitte wählen —"] + existing_players + ["Neuer Spieler …"]
+player_options = existing_players + ["Neuer Spieler …"]
 
 with st.form("player_input"):
     colA, colB = st.columns([2,2])
     with colA:
-        player_choice = st.selectbox("Spieler", options=player_options, index=0)
+        player_choice = st.selectbox(
+            "Spieler", options=player_options, index=None, placeholder="— bitte wählen —"
+        )
         player_name = ""
         if player_choice == "Neuer Spieler …":
             player_name = st.text_input("Neuer Spielername").strip()
-        elif player_choice != "— bitte wählen —":
-            player_name = player_choice
+        elif player_choice:
+            player_name = str(player_choice)
 
     with colB:
         preference = st.selectbox("Einzel/Doppel Präferenz",
@@ -149,7 +151,7 @@ with st.form("player_input"):
 
     notes = st.text_area("Notizen (z.B. 'nicht vor 19:00', 'Mittwoch 18:00 gesperrt')")
 
-    # Build draft + validate
+    # Build draft + summary (validate after submit)
     def _clean_ranges(df_ranges: pd.DataFrame):
         rows = []
         for _, r in df_ranges.fillna("").iterrows():
@@ -176,14 +178,7 @@ with st.form("player_input"):
     ranges_clean = _clean_ranges(ranges_df)
     singles_clean = sorted(set([d for d in blocked_singles if WINDOW_START <= d <= WINDOW_END]))
 
-    errors = []
-    if not player_name:
-        errors.append("Bitte Spieler auswählen oder neuen Namen eingeben.")
-
     st.subheader("Zusammenfassung")
-    if errors:
-        for e in errors:
-            st.error(e)
     day_str = ", ".join(sorted(avail_days)) if avail_days else "—"
     ranges_str = "; ".join([f"{v} → {b}" for (v, b) in ranges_clean]) if ranges_clean else "—"
     singles_str = "; ".join(pd.to_datetime(singles_clean).strftime("%Y-%m-%d").tolist()) if singles_clean else "—"
@@ -197,50 +192,58 @@ with st.form("player_input"):
         f"**Notizen:** {notes.strip() or '—'}"
     )
 
-    confirmed = st.form_submit_button("✅ Bestätigen & Speichern", disabled=bool(errors))
+    confirmed = st.form_submit_button("✅ Bestätigen & Speichern")
 
-# Save on confirm
-if confirmed and not errors:
-    now_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-    row = {
-        "Spieler": player_name,
-        "ValidFrom": WINDOW_START.strftime("%Y-%m-%d"),
-        "ValidTo": WINDOW_END.strftime("%Y-%m-%d"),
-        "AvailableDays": ",".join(sorted(avail_days)) if avail_days else "",
-        "Preference": preference,
-        "BlockedRanges": ";".join([f"{v.strftime('%Y-%m-%d')}→{b.strftime('%Y-%m-%d')}" for (v, b) in ranges_clean]),
-        "BlockedSingles": ";".join([pd.to_datetime(d).strftime("%Y-%m-%d") for d in singles_clean]),
-        "Notes": notes.strip(),
-        "Timestamp": now_iso,
-    }
+# Save on confirm (with validation now)
+if confirmed:
+    errors = []
+    if not player_name:
+        errors.append("Bitte Spieler auswählen oder neuen Namen eingeben.")
 
-    try:
-        exist_bytes, _sha = github_get_contents(PREFS_PATH)
-        if exist_bytes:
-            prefs_df = pd.read_csv(io.BytesIO(exist_bytes), dtype=str)
-        else:
+    if errors:
+        for e in errors:
+            st.error(e)
+    else:
+        now_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        row = {
+            "Spieler": player_name,
+            "ValidFrom": WINDOW_START.strftime("%Y-%m-%d"),
+            "ValidTo": WINDOW_END.strftime("%Y-%m-%d"),
+            "AvailableDays": ",".join(sorted(avail_days)) if avail_days else "",
+            "Preference": preference,
+            "BlockedRanges": ";".join([f\"{v.strftime('%Y-%m-%d')}→{b.strftime('%Y-%m-%d')}\" for (v, b) in ranges_clean]),
+            "BlockedSingles": ";".join([pd.to_datetime(d).strftime("%Y-%m-%d") for d in singles_clean]),
+            "Notes": notes.strip(),
+            "Timestamp": now_iso,
+        }
+
+        try:
+            exist_bytes, _sha = github_get_contents(PREFS_PATH)
+            if exist_bytes:
+                prefs_df = pd.read_csv(io.BytesIO(exist_bytes), dtype=str)
+            else:
+                prefs_df = pd.DataFrame(columns=list(row.keys()))
+        except Exception:
             prefs_df = pd.DataFrame(columns=list(row.keys()))
-    except Exception:
-        prefs_df = pd.DataFrame(columns=list(row.keys()))
 
-    if not prefs_df.empty and "Spieler" in prefs_df.columns:
-        prefs_df = prefs_df[prefs_df["Spieler"] != player_name]
+        if not prefs_df.empty and "Spieler" in prefs_df.columns:
+            prefs_df = prefs_df[prefs_df["Spieler"] != player_name]
 
-    prefs_df = pd.concat([prefs_df, pd.DataFrame([row])], ignore_index=True)
-    csv_bytes = prefs_df[list(row.keys())].to_csv(index=False).encode("utf-8")
+        prefs_df = pd.concat([prefs_df, pd.DataFrame([row])], ignore_index=True)
+        csv_bytes = prefs_df[list(row.keys())].to_csv(index=False).encode("utf-8")
 
-    try:
-        res = github_put_contents(
-            path=PREFS_PATH,
-            csv_bytes=csv_bytes,
-            message=f"Prefs 2026 update: {player_name}",
-            branch_override=st.secrets.get("GITHUB_BRANCH", "main")
-        )
-        st.success("Einstellungen gespeichert ✅")
-        st.subheader("Gespeicherte Einstellungen (Vorschau)")
-        st.dataframe(prefs_df[prefs_df["Spieler"] == player_name], width="stretch")
-    except Exception as e:
-        st.error(f"Speichern fehlgeschlagen: {e}")
+        try:
+            _ = github_put_contents(
+                path=PREFS_PATH,
+                csv_bytes=csv_bytes,
+                message=f"Prefs 2026 update: {player_name}",
+                branch_override=st.secrets.get("GITHUB_BRANCH", "main")
+            )
+            st.success("Einstellungen gespeichert ✅")
+            st.subheader("Gespeicherte Einstellungen (Vorschau)")
+            st.dataframe(prefs_df[prefs_df["Spieler"] == player_name], width="stretch")
+        except Exception as e:
+            st.error(f"Speichern fehlgeschlagen: {e}")
 
 st.markdown("---")
 st.caption("Hinweis: Diese App speichert nur deine Eingaben für 01.01.2026–26.04.2026. "
