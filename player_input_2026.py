@@ -89,7 +89,9 @@ def load_names_from_plan():
     for c in ["Datum","Tag","Slot","Typ","Spieler"]:
         if c in df_raw.columns:
             df_raw[c] = df_raw[c].astype(str)
-    df_raw["Spieler_list"] = df_raw["Spieler"].str.split(",").apply(lambda xs: [x.strip() for x in xs if str(x).strip()])
+    df_raw["Spieler_list"] = df_raw["Spieler"].str.split(",").apply(
+        lambda xs: [x.strip() for x in xs if str(x).strip()]
+    )
     df_exp = df_raw.explode("Spieler_list").rename(columns={"Spieler_list":"Spieler_Name"})
     names = sorted(set([n for n in df_exp["Spieler_Name"].dropna().tolist() if str(n).strip()]))
     return names
@@ -106,6 +108,7 @@ player_options = existing_players + ["Neuer Spieler …"]
 
 with st.form("player_input"):
     colA, colB = st.columns([2,2])
+
     with colA:
         player_choice = st.selectbox(
             "Spieler", options=player_options, index=None, placeholder="— bitte wählen —"
@@ -117,9 +120,11 @@ with st.form("player_input"):
             player_name = str(player_choice)
 
     with colB:
-        preference = st.selectbox("Einzel/Doppel Präferenz",
-                                  options=["Keine Präferenz", "Nur Einzel", "Nur Doppel"],
-                                  index=0)
+        preference = st.selectbox(
+            "Einzel/Doppel Präferenz",
+            options=["Keine Präferenz", "Nur Einzel", "Nur Doppel"],
+            index=0
+        )
 
     st.markdown("**Wochentags-Verfügbarkeit** (mehrere möglich)")
     c1, c2, c3 = st.columns(3)
@@ -142,6 +147,7 @@ with st.form("player_input"):
         width="stretch",
         key="ranges_editor"
     )
+
     all_days = pd.date_range(WINDOW_START, WINDOW_END, freq="D").date.tolist()
     blocked_singles = st.multiselect(
         "Blockierte Einzeltage",
@@ -211,7 +217,7 @@ if confirmed:
             "ValidTo": WINDOW_END.strftime("%Y-%m-%d"),
             "AvailableDays": ",".join(sorted(avail_days)) if avail_days else "",
             "Preference": preference,
-            "BlockedRanges": ";".join([f\"{v.strftime('%Y-%m-%d')}→{b.strftime('%Y-%m-%d')}\" for (v, b) in ranges_clean]),
+            "BlockedRanges": ";".join([f"{v.strftime('%Y-%m-%d')}→{b.strftime('%Y-%m-%d')}" for (v, b) in ranges_clean]),
             "BlockedSingles": ";".join([pd.to_datetime(d).strftime("%Y-%m-%d") for d in singles_clean]),
             "Notes": notes.strip(),
             "Timestamp": now_iso,
