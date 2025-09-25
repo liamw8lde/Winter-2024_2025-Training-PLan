@@ -97,46 +97,174 @@ def load_names_from_plan():
     return names
 
 # =========================
-# UI – Form with confirm step
+# Helpers for parsing/formatting stored values
+# =========================
+def parse_available_days(s: str) -> set:
+    if not s or not isinstance(s, str):
+        return set()
+    return set([p.strip() for p in s.split(",") if p.strip()])
+
+def parse_blocked_ranges(s: str):
+    """Return list[(date_from, date_to)] from 'YYYY-MM-DD→YYYY-MM-DD;...'"""
+    out = []
+    if not s or not isinstance(s, str):
+        return out
+    for token in s.split(";"):
+        token = token.strip()
+        if not token or "→" not in token:
+            continue
+        a, b = [x.strip() for x in token.split("→", 1)]
+        try:
+            da = pd.to_datetime(a).date()
+            db = pd.to_datetime(b).date()
+            out.append((da, db))
+        except Exception:
+            pass
+    return out
+
+def parse_blocked_singles(s: str):
+    """Return list[date] from 'YYYY-MM-DD;YYYY-MM-DD;...'"""
+    out = []
+    if not s or not isinstance(s, str):
+        return out
+    for token in s.split(";"):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            out.append(pd.to_datetime(token).date())
+        except Exception:
+            pass
+    return out
+
+def merge_ranges(rows):
+    """Merge overlapping/adjacent ranges; rows is list[(start, end)]."""
+    rows = [(max(a, WINDOW_START), min(b, WINDOW_END)) for (a, b) in rows if a <= b]
+    rows.sort()
+    merged = []
+    for a, b in rows:
+        if not merged or a > merged[-1][1] + timedelta(days=1):
+            merged.append((a, b))
+        else:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], b))
+    return merged
+
+# =========================
+# Load existing prefs (for prefilling & download)
+# =========================
+@st.cache_data(show_spinner=False)
+def load_prefs_df():
+    try:
+        csv_bytes, _ = github_get_contents(PREFS_PATH)
+        if not csv_bytes:
+            return pd.DataFrame(columns=[
+                "Spieler","ValidFrom","ValidTo","AvailableDays",
+                "Preference","BlockedRanges","BlockedSingles","Notes","Timestamp"
+            ])
+        df = pd.read_csv(io.BytesIO(csv_bytes), dtype=str)
+        # ensure all columns exist
+        for c in ["Spieler","ValidFrom","ValidTo","AvailableDays","Preference",
+                  "BlockedRanges","BlockedSingles","Notes","Timestamp"]:
+            if c not in df.columns:
+                df[c] = ""
+        return df
+    except Exception:
+        return pd.DataFrame(columns=[
+            "Spieler","ValidFrom","ValidTo","AvailableDays",
+            "Preference","BlockedRanges","BlockedSingles","Notes","Timestamp"
+        ])
+
+# =========================
+# UI – Form with prefill, edit, confirm, save
 # =========================
 st.title("Spieler-Eingabe (01.01.2026 – 26.04.2026)")
 st.caption("Bitte gib deine Verfügbarkeit, Urlaubszeiträume/Einzeltage, Präferenz und Notizen an. "
-           "Am Ende siehst du eine Zusammenfassung – erst **Bestätigen & Speichern** sichert deine Eingaben.")
+           "Wenn du einen bestehenden Spieler wählst, werden seine gespeicherten Daten geladen und können bearbeitet werden.")
 
 existing_players = load_names_from_plan()
+prefs_df = load_prefs_df()
 player_options = existing_players + ["Neuer Spieler …"]
 
+# ----- selection -----
+col_sel, col_dl = st.columns([2,1])
+with col_sel:
+    player_choice = st.selectbox(
+        "Spieler", options=player_options, index=None, placeholder="— bitte wählen —"
+    )
+
+# ----- prefill if exists -----
+prefill = {
+    "player_name": "",
+    "preference": "Keine Präferenz",
+    "avail_days": set(),
+    "ranges": [],          # list[(start, end)]
+    "blocked_singles": [], # list[date]
+    "notes": "",
+}
+if player_choice and player_choice != "Neuer Spieler …":
+    prefill["player_name"] = str(player_choice)
+    row_exist = prefs_df[prefs_df["Spieler"] == prefill["player_name"]]
+    if not row_exist.empty:
+        r = row_exist.iloc[0].fillna("")
+        prefill["preference"] = (r.get("Preference") or "Keine Präferenz").strip() or "Keine Präferenz"
+        prefill["avail_days"] = parse_available_days(r.get("AvailableDays", ""))
+        prefill["ranges"] = parse_blocked_ranges(r.get("BlockedRanges", ""))
+        prefill["blocked_singles"] = parse_blocked_singles(r.get("BlockedSingles", ""))
+        prefill["notes"] = (r.get("Notes") or "").strip()
+
+        # ----- download link for this player's stored row -----
+        with col_dl:
+            single_row_csv = row_exist.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "📥 Gespeicherte Daten herunterladen",
+                data=single_row_csv,
+                file_name=f"{prefill['player_name'].replace(' ','_')}_Prefs_2026.csv",
+                mime="text/csv",
+                help="Lädt den aktuellen gespeicherten Datensatz dieses Spielers als CSV herunter."
+            )
+
+# Keep a separate editor state so switching players refreshes properly
+if "ranges_df" not in st.session_state:
+    st.session_state["ranges_df"] = pd.DataFrame(columns=["von","bis"])
+
+# Replace editor dataframe with prefilled ranges (if any)
+if prefill["ranges"]:
+    st.session_state["ranges_df"] = pd.DataFrame(
+        [{"von": a, "bis": b} for (a, b) in prefill["ranges"]]
+    )
+else:
+    st.session_state["ranges_df"] = pd.DataFrame(columns=["von","bis"])
+
+# ----- FORM -----
 with st.form("player_input"):
     colA, colB = st.columns([2,2])
 
     with colA:
-        player_choice = st.selectbox(
-            "Spieler", options=player_options, index=None, placeholder="— bitte wählen —"
-        )
         player_name = ""
         if player_choice == "Neuer Spieler …":
             player_name = st.text_input("Neuer Spielername").strip()
         elif player_choice:
-            player_name = str(player_choice)
+            st.text_input("Spieler (ausgewählt)", value=prefill["player_name"], disabled=True)
+            player_name = prefill["player_name"]
 
     with colB:
         preference = st.selectbox(
             "Einzel/Doppel Präferenz",
             options=["Keine Präferenz", "Nur Einzel", "Nur Doppel"],
-            index=0
+            index=["Keine Präferenz", "Nur Einzel", "Nur Doppel"].index(prefill["preference"])
+            if prefill["preference"] in {"Keine Präferenz","Nur Einzel","Nur Doppel"} else 0
         )
 
     st.markdown("**Wochentags-Verfügbarkeit** (mehrere möglich)")
     c1, c2, c3 = st.columns(3)
     avail_days = set()
-    if c1.checkbox("Montag"): avail_days.add("Montag")
-    if c2.checkbox("Mittwoch"): avail_days.add("Mittwoch")
-    if c3.checkbox("Donnerstag"): avail_days.add("Donnerstag")
+    if c1.checkbox("Montag", value=("Montag" in prefill["avail_days"])): avail_days.add("Montag")
+    if c2.checkbox("Mittwoch", value=("Mittwoch" in prefill["avail_days"])): avail_days.add("Mittwoch")
+    if c3.checkbox("Donnerstag", value=("Donnerstag" in prefill["avail_days"])): avail_days.add("Donnerstag")
 
     st.markdown("**Urlaub/Abwesenheit**")
     st.caption("• Datumsspannen als Tabelle  • Einzeltage als Mehrfachauswahl  • Alle Daten müssen zwischen 01.01.2026 und 26.04.2026 liegen.")
-    if "ranges_df" not in st.session_state:
-        st.session_state["ranges_df"] = pd.DataFrame(columns=["von","bis"])
+
     ranges_df = st.data_editor(
         st.session_state["ranges_df"],
         num_rows="dynamic",
@@ -152,10 +280,14 @@ with st.form("player_input"):
     blocked_singles = st.multiselect(
         "Blockierte Einzeltage",
         options=all_days,
+        default=prefill["blocked_singles"],
         format_func=lambda d: pd.to_datetime(d).strftime("%Y-%m-%d")
     )
 
-    notes = st.text_area("Notizen (z.B. 'nicht vor 19:00', 'Mittwoch 18:00 gesperrt')")
+    notes = st.text_area(
+        "Notizen (z.B. 'nicht vor 19:00', 'Mittwoch 18:00 gesperrt')",
+        value=prefill["notes"]
+    )
 
     # Build draft + summary (validate after submit)
     def _clean_ranges(df_ranges: pd.DataFrame):
@@ -172,14 +304,7 @@ with st.form("player_input"):
             b = min(b, WINDOW_END)
             if v <= b:
                 rows.append((v, b))
-        rows.sort()
-        merged = []
-        for v, b in rows:
-            if not merged or v > merged[-1][1] + timedelta(days=1):
-                merged.append((v, b))
-            else:
-                merged[-1] = (merged[-1][0], max(merged[-1][1], b))
-        return merged
+        return merge_ranges(rows)
 
     ranges_clean = _clean_ranges(ranges_df)
     singles_clean = sorted(set([d for d in blocked_singles if WINDOW_START <= d <= WINDOW_END]))
@@ -200,12 +325,11 @@ with st.form("player_input"):
 
     confirmed = st.form_submit_button("✅ Bestätigen & Speichern")
 
-# Save on confirm (with validation now)
+# Save on confirm
 if confirmed:
     errors = []
     if not player_name:
         errors.append("Bitte Spieler auswählen oder neuen Namen eingeben.")
-
     if errors:
         for e in errors:
             st.error(e)
@@ -223,22 +347,13 @@ if confirmed:
             "Timestamp": now_iso,
         }
 
-        try:
-            exist_bytes, _sha = github_get_contents(PREFS_PATH)
-            if exist_bytes:
-                prefs_df = pd.read_csv(io.BytesIO(exist_bytes), dtype=str)
-            else:
-                prefs_df = pd.DataFrame(columns=list(row.keys()))
-        except Exception:
-            prefs_df = pd.DataFrame(columns=list(row.keys()))
-
+        # Replace old row (if any), then append
         if not prefs_df.empty and "Spieler" in prefs_df.columns:
             prefs_df = prefs_df[prefs_df["Spieler"] != player_name]
-
         prefs_df = pd.concat([prefs_df, pd.DataFrame([row])], ignore_index=True)
-        csv_bytes = prefs_df[list(row.keys())].to_csv(index=False).encode("utf-8")
 
         try:
+            csv_bytes = prefs_df[list(row.keys())].to_csv(index=False).encode("utf-8")
             _ = github_put_contents(
                 path=PREFS_PATH,
                 csv_bytes=csv_bytes,
