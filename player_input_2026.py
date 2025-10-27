@@ -147,7 +147,9 @@ st.write("**Einzelne Tage blockieren:**")
 prev_blocked_days = []
 if prev.get("BlockedDays"):
     try:
-        prev_blocked_days = [pd.to_datetime(d.strip()).date() for d in str(prev.get("BlockedDays")).split(";") if d.strip()]
+        parsed_days = [pd.to_datetime(d.strip()).date() for d in str(prev.get("BlockedDays")).split(";") if d.strip()]
+        # Filter to only include dates within valid range
+        prev_blocked_days = [d for d in parsed_days if DATE_START <= d <= DATE_END]
     except:
         pass
 
@@ -159,16 +161,31 @@ blocked_days = st.multiselect(
 )
 
 st.subheader("Verfügbarkeit")
+# Get previous available days and filter to valid options
+valid_days = ["Montag","Mittwoch","Donnerstag"]
+prev_avail_days = []
+if prev.get("AvailableDays"):
+    parsed_days = [d.strip() for d in prev.get("AvailableDays","").split(";") if d.strip()]
+    prev_avail_days = [d for d in parsed_days if d in valid_days]
+
 avail_days = st.multiselect(
     "Wochentage an denen du kannst",
-    options=["Montag","Mittwoch","Donnerstag"],
-    default=prev.get("AvailableDays","").split(";") if prev.get("AvailableDays") else []
+    options=valid_days,
+    default=prev_avail_days
 )
+
+pref_options = ["keine Präferenz","nur Einzel","nur Doppel"]
+prev_pref = prev.get("Preference", "keine Präferenz")
+# Get index safely, default to 0 if not found
+try:
+    pref_index = pref_options.index(prev_pref) if prev_pref in pref_options else 0
+except ValueError:
+    pref_index = 0
 
 pref = st.radio(
     "Bevorzugt",
-    ["keine Präferenz","nur Einzel","nur Doppel"],
-    index=["keine Präferenz","nur Einzel","nur Doppel"].index(prev.get("Preference","keine Präferenz")) if prev.get("Preference") else 0
+    pref_options,
+    index=pref_index
 )
 
 notes = st.text_area("Zusätzliche Hinweise", value=prev.get("Notes",""))
