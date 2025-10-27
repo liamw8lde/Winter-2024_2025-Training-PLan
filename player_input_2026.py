@@ -11,11 +11,26 @@ DATE_END = date(2026, 4, 26)
 
 def load_data():
     try:
-        return pd.read_csv(CSV_FILE, dtype=str)
+        df = pd.read_csv(CSV_FILE, dtype=str)
+        # Handle legacy column names for compatibility
+        if "BlockedSingles" in df.columns and "BlockedDays" not in df.columns:
+            df["BlockedDays"] = df["BlockedSingles"]
+
+        # Normalize data formats for compatibility
+        if "AvailableDays" in df.columns:
+            # Convert comma-separated to semicolon-separated
+            df["AvailableDays"] = df["AvailableDays"].str.replace(",", ";")
+
+        if "Preference" in df.columns:
+            # Normalize preference capitalization
+            df["Preference"] = df["Preference"].str.replace("Nur Einzel", "nur Einzel")
+            df["Preference"] = df["Preference"].str.replace("Nur Doppel", "nur Doppel")
+
+        return df
     except FileNotFoundError:
         return pd.DataFrame(columns=[
-            "Spieler","BlockedRanges","BlockedDays","AvailableDays",
-            "Preference","Notes","Timestamp"
+            "Spieler","ValidFrom","ValidTo","AvailableDays","Preference",
+            "BlockedRanges","BlockedDays","Notes","Timestamp"
         ])
 
 def save_data(df):
@@ -104,10 +119,12 @@ st.write("**Hinweise:**", notes or "-")
 if st.button("✅ Bestätigen und Speichern"):
     new_row = pd.DataFrame([{
         "Spieler": sel_player,
-        "BlockedRanges": ";".join([f"{v.strftime('%Y-%m-%d')}→{b.strftime('%Y-%m-%d')}" for (v, b) in blocked_ranges]),
-        "BlockedDays": ";".join(d.strftime("%Y-%m-%d") for d in blocked_days),
+        "ValidFrom": DATE_START.strftime("%Y-%m-%d"),
+        "ValidTo": DATE_END.strftime("%Y-%m-%d"),
         "AvailableDays": ";".join(avail_days),
         "Preference": pref,
+        "BlockedRanges": ";".join([f"{v.strftime('%Y-%m-%d')}→{b.strftime('%Y-%m-%d')}" for (v, b) in blocked_ranges]),
+        "BlockedDays": ";".join(d.strftime("%Y-%m-%d") for d in blocked_days),
         "Notes": notes,
         "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }])
