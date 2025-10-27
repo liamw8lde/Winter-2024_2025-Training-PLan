@@ -5,7 +5,7 @@ from datetime import datetime, date
 
 st.set_page_config(page_title="Spieler Eingaben 2026", layout="wide")
 
-CSV_FILE = "player_inputs_2026.csv"
+CSV_FILE = "Spieler_Preferences_2026.csv"
 DATE_START = date(2026, 1, 1)
 DATE_END = date(2026, 4, 26)
 
@@ -111,7 +111,7 @@ if st.button("✅ Bestätigen und Speichern"):
         "Notes": notes,
         "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }])
-    df_all = df_all[df_all["Spieler"]!=sel_player].append(new_row, ignore_index=True)
+    df_all = pd.concat([df_all[df_all["Spieler"]!=sel_player], new_row], ignore_index=True)
     save_data(df_all)
     st.success("Gespeichert!")
     st.dataframe(df_all[df_all["Spieler"]==sel_player])
