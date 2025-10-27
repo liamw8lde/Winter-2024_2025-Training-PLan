@@ -36,20 +36,27 @@ def load_data():
 def save_data(df):
     df.to_csv(CSV_FILE, index=False)
 
-def parse_ranges(ranges_df):
-    clean = []
-    for _, r in ranges_df.iterrows():
-        if not r["von"] or not r["bis"]:
+def parse_blocked_ranges_from_csv(blocked_ranges_str):
+    """Parse BlockedRanges from CSV format: '2026-01-03→2026-01-10;2026-02-15→2026-02-20'"""
+    ranges = []
+    if not blocked_ranges_str or pd.isna(blocked_ranges_str):
+        return ranges
+
+    for range_str in str(blocked_ranges_str).split(";"):
+        range_str = range_str.strip()
+        if not range_str or "→" not in range_str:
             continue
         try:
-            v = pd.to_datetime(r["von"]).date()
-            b = pd.to_datetime(r["bis"]).date()
-            if v > b:
-                v, b = b, v
-            clean.append((v, b))
+            parts = range_str.split("→")
+            if len(parts) == 2:
+                v = pd.to_datetime(parts[0].strip()).date()
+                b = pd.to_datetime(parts[1].strip()).date()
+                if v > b:
+                    v, b = b, v
+                ranges.append((v, b))
         except:
             pass
-    return clean
+    return ranges
 
 st.title("🎾 Spieler Eingaben Winter 2026")
 
@@ -84,6 +91,11 @@ if not sel_player:
     st.warning("Bitte Spieler auswählen oder neuen Namen eingeben.")
     st.stop()
 
+# Track player changes to reload data
+if "current_player" not in st.session_state or st.session_state["current_player"] != sel_player:
+    st.session_state["current_player"] = sel_player
+    st.session_state.pop("blocked_ranges_list", None)  # Reset ranges when player changes
+
 existing = df_all[df_all["Spieler"]==sel_player]
 if not existing.empty:
     prev = existing.iloc[-1]
@@ -91,23 +103,69 @@ if not existing.empty:
 else:
     prev = {}
 
-st.subheader("Urlaub / Abwesenheit")
-st.caption("• Datumsspannen als Tabelle  • Einzeltage als Mehrfachauswahl")
+# Initialize blocked_ranges_list from previous data
+if "blocked_ranges_list" not in st.session_state:
+    # Load from previous entry if exists
+    prev_ranges = parse_blocked_ranges_from_csv(prev.get("BlockedRanges", ""))
+    st.session_state["blocked_ranges_list"] = prev_ranges if prev_ranges else []
 
-if "ranges_df" not in st.session_state:
-    st.session_state["ranges_df"] = pd.DataFrame(columns=["von","bis"])
-ranges_df = st.data_editor(
-    st.session_state["ranges_df"],
-    num_rows="dynamic",
-    column_config={"von":"Von (YYYY-MM-DD)","bis":"Bis (YYYY-MM-DD)"}
+st.subheader("Urlaub / Abwesenheit")
+st.caption("📅 Wähle Zeiträume im Kalender aus")
+
+# Display existing date ranges and allow removal
+if st.session_state["blocked_ranges_list"]:
+    st.write("**Gewählte Zeiträume:**")
+    ranges_to_remove = []
+    for i, (start, end) in enumerate(st.session_state["blocked_ranges_list"]):
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.write(f"{i+1}. {start.strftime('%d.%m.%Y')} bis {end.strftime('%d.%m.%Y')}")
+        with col2:
+            if st.button("❌", key=f"remove_{i}"):
+                ranges_to_remove.append(i)
+
+    # Remove marked ranges
+    for i in sorted(ranges_to_remove, reverse=True):
+        st.session_state["blocked_ranges_list"].pop(i)
+        st.rerun()
+
+# Add new date range
+st.write("**Neuen Zeitraum hinzufügen:**")
+new_range = st.date_input(
+    "Wähle Start- und Enddatum",
+    value=(),
+    min_value=DATE_START,
+    max_value=DATE_END,
+    key="new_range_input"
 )
-blocked_ranges = parse_ranges(ranges_df)
+
+if st.button("➕ Zeitraum hinzufügen"):
+    if isinstance(new_range, tuple) and len(new_range) == 2:
+        start_date, end_date = new_range
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+        st.session_state["blocked_ranges_list"].append((start_date, end_date))
+        st.success(f"Zeitraum {start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')} hinzugefügt!")
+        st.rerun()
+    else:
+        st.warning("Bitte wähle sowohl Start- als auch Enddatum aus.")
+
+blocked_ranges = st.session_state["blocked_ranges_list"]
+
+# Single blocked days
+st.write("**Einzelne Tage blockieren:**")
+prev_blocked_days = []
+if prev.get("BlockedDays"):
+    try:
+        prev_blocked_days = [pd.to_datetime(d.strip()).date() for d in str(prev.get("BlockedDays")).split(";") if d.strip()]
+    except:
+        pass
 
 blocked_days = st.multiselect(
-    "Einzeltage blockieren",
+    "Wähle einzelne Tage aus",
     options=pd.date_range(DATE_START, DATE_END).date,
-    default=[],
-    format_func=lambda d: d.strftime("%Y-%m-%d")
+    default=prev_blocked_days,
+    format_func=lambda d: d.strftime("%d.%m.%Y (%A)")
 )
 
 st.subheader("Verfügbarkeit")
@@ -127,8 +185,8 @@ notes = st.text_area("Zusätzliche Hinweise", value=prev.get("Notes",""))
 
 st.subheader("Zusammenfassung")
 st.write(f"**Spieler:** {sel_player}")
-st.write("**Blockierte Zeiträume:**", ", ".join([f"{v}→{b}" for v,b in blocked_ranges]) or "-")
-st.write("**Blockierte Tage:**", ", ".join(d.strftime("%Y-%m-%d") for d in blocked_days) or "-")
+st.write("**Blockierte Zeiträume:**", ", ".join([f"{v.strftime('%d.%m.%Y')} - {b.strftime('%d.%m.%Y')}" for v,b in blocked_ranges]) or "-")
+st.write("**Blockierte Tage:**", ", ".join(d.strftime("%d.%m.%Y") for d in blocked_days) or "-")
 st.write("**Verfügbarkeit:**", ", ".join(avail_days) or "-")
 st.write("**Präferenz:**", pref)
 st.write("**Hinweise:**", notes or "-")
