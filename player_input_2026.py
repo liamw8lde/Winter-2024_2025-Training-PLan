@@ -55,11 +55,28 @@ st.title("🎾 Spieler Eingaben Winter 2026")
 
 df_all = load_data()
 
-all_players = sorted(df_all["Spieler"].dropna().unique().tolist())
+# Extract player list, filtering out empty/whitespace entries
+all_players = [p.strip() for p in df_all["Spieler"].dropna().astype(str).unique() if str(p).strip()]
+all_players = sorted(all_players)
+
+# Debug info (can be removed later)
+if all_players:
+    st.sidebar.success(f"✓ {len(all_players)} Spieler gefunden")
+    st.sidebar.write("Spieler:", ", ".join(all_players))
+else:
+    st.sidebar.warning("Keine Spieler gefunden")
+    st.sidebar.write(f"CSV geladen: {len(df_all)} Zeilen")
+    if not df_all.empty:
+        st.sidebar.write("Erste Zeile Spieler-Spalte:", df_all["Spieler"].iloc[0] if len(df_all) > 0 else "leer")
+
 sel_mode = st.radio("Spieler auswählen oder neu eingeben", ["Vorhandener Spieler","Neuer Spieler"])
 
-if sel_mode == "Vorhandener Spieler" and all_players:
-    sel_player = st.selectbox("Spieler", all_players)
+if sel_mode == "Vorhandener Spieler":
+    if all_players:
+        sel_player = st.selectbox("Spieler", all_players)
+    else:
+        st.warning("Keine vorhandenen Spieler gefunden. Bitte 'Neuer Spieler' wählen.")
+        sel_player = ""
 else:
     sel_player = st.text_input("Neuer Spielername").strip()
 
