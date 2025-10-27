@@ -85,6 +85,7 @@ if not sel_player:
 if "current_player" not in st.session_state or st.session_state["current_player"] != sel_player:
     st.session_state["current_player"] = sel_player
     st.session_state.pop("blocked_ranges_list", None)  # Reset ranges when player changes
+    st.session_state.pop("blocked_days_list", None)  # Reset days when player changes
 
 existing = df_all[df_all["Spieler"]==sel_player]
 if not existing.empty:
@@ -98,6 +99,19 @@ if "blocked_ranges_list" not in st.session_state:
     # Load from previous entry if exists
     prev_ranges = parse_blocked_ranges_from_csv(prev.get("BlockedRanges", ""))
     st.session_state["blocked_ranges_list"] = prev_ranges if prev_ranges else []
+
+# Initialize blocked_days_list from previous data
+if "blocked_days_list" not in st.session_state:
+    # Load from previous entry if exists
+    prev_days = []
+    if prev.get("BlockedDays"):
+        try:
+            parsed_days = [pd.to_datetime(d.strip()).date() for d in str(prev.get("BlockedDays")).split(";") if d.strip()]
+            # Filter to only include dates within valid range
+            prev_days = [d for d in parsed_days if DATE_START <= d <= DATE_END]
+        except:
+            pass
+    st.session_state["blocked_days_list"] = prev_days if prev_days else []
 
 st.subheader("Urlaub / Abwesenheit")
 st.caption("📅 Wähle Zeiträume im Kalender aus")
@@ -144,21 +158,45 @@ blocked_ranges = st.session_state["blocked_ranges_list"]
 
 # Single blocked days
 st.write("**Einzelne Tage blockieren:**")
-prev_blocked_days = []
-if prev.get("BlockedDays"):
-    try:
-        parsed_days = [pd.to_datetime(d.strip()).date() for d in str(prev.get("BlockedDays")).split(";") if d.strip()]
-        # Filter to only include dates within valid range
-        prev_blocked_days = [d for d in parsed_days if DATE_START <= d <= DATE_END]
-    except:
-        pass
 
-blocked_days = st.multiselect(
-    "Wähle einzelne Tage aus",
-    options=pd.date_range(DATE_START, DATE_END).date,
-    default=prev_blocked_days,
-    format_func=lambda d: d.strftime("%d.%m.%Y (%A)")
+# Display existing blocked days and allow removal
+if st.session_state["blocked_days_list"]:
+    st.write("Gewählte Tage:")
+    days_to_remove = []
+    for i, day in enumerate(sorted(st.session_state["blocked_days_list"])):
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.write(f"{i+1}. {day.strftime('%d.%m.%Y (%A)')}")
+        with col2:
+            if st.button("❌", key=f"remove_day_{i}"):
+                days_to_remove.append(day)
+
+    # Remove marked days
+    for day in days_to_remove:
+        st.session_state["blocked_days_list"].remove(day)
+        st.rerun()
+
+# Add new single day
+new_day = st.date_input(
+    "Wähle einen einzelnen Tag",
+    value=None,
+    min_value=DATE_START,
+    max_value=DATE_END,
+    key="new_day_input"
 )
+
+if st.button("➕ Tag hinzufügen"):
+    if new_day:
+        if new_day not in st.session_state["blocked_days_list"]:
+            st.session_state["blocked_days_list"].append(new_day)
+            st.success(f"Tag {new_day.strftime('%d.%m.%Y (%A)')} hinzugefügt!")
+            st.rerun()
+        else:
+            st.warning("Dieser Tag ist bereits in der Liste.")
+    else:
+        st.warning("Bitte wähle ein Datum aus.")
+
+blocked_days = st.session_state["blocked_days_list"]
 
 st.subheader("Verfügbarkeit")
 # Get previous available days and filter to valid options
