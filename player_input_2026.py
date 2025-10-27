@@ -135,6 +135,7 @@ if st.session_state["blocked_ranges_list"]:
 
 # Add new date range
 st.write("**Neuen Zeitraum hinzufügen:**")
+st.caption("ℹ️ Wähle Start- und Enddatum im Kalender aus, dann auf '➕ Zeitraum hinzufügen' klicken")
 new_range = st.date_input(
     "Wähle Start- und Enddatum",
     value=(),
@@ -177,6 +178,7 @@ if st.session_state["blocked_days_list"]:
         st.rerun()
 
 # Add new single day
+st.caption("ℹ️ Wähle ein Datum im Kalender aus, dann auf '➕ Tag hinzufügen' klicken")
 new_day = st.date_input(
     "Wähle einen einzelnen Tag",
     value=None,
