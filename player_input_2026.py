@@ -5,17 +5,32 @@ from datetime import datetime, date
 
 st.set_page_config(page_title="Spieler Eingaben 2026", layout="wide")
 
-CSV_FILE = "player_inputs_2026.csv"
+CSV_FILE = "Spieler_Preferences_2026.csv"
 DATE_START = date(2026, 1, 1)
 DATE_END = date(2026, 4, 26)
 
 def load_data():
     try:
-        return pd.read_csv(CSV_FILE, dtype=str)
+        df = pd.read_csv(CSV_FILE, dtype=str)
+        # Handle legacy column names for compatibility
+        if "BlockedSingles" in df.columns and "BlockedDays" not in df.columns:
+            df["BlockedDays"] = df["BlockedSingles"]
+
+        # Normalize data formats for compatibility
+        if "AvailableDays" in df.columns:
+            # Convert comma-separated to semicolon-separated
+            df["AvailableDays"] = df["AvailableDays"].str.replace(",", ";")
+
+        if "Preference" in df.columns:
+            # Normalize preference capitalization
+            df["Preference"] = df["Preference"].str.replace("Nur Einzel", "nur Einzel")
+            df["Preference"] = df["Preference"].str.replace("Nur Doppel", "nur Doppel")
+
+        return df
     except FileNotFoundError:
         return pd.DataFrame(columns=[
-            "Spieler","BlockedRanges","BlockedDays","AvailableDays",
-            "Preference","Notes","Timestamp"
+            "Spieler","ValidFrom","ValidTo","AvailableDays","Preference",
+            "BlockedRanges","BlockedDays","Notes","Timestamp"
         ])
 
 def save_data(df):
@@ -40,11 +55,28 @@ st.title("🎾 Spieler Eingaben Winter 2026")
 
 df_all = load_data()
 
-all_players = sorted(df_all["Spieler"].dropna().unique().tolist())
+# Extract player list, filtering out empty/whitespace entries
+all_players = [p.strip() for p in df_all["Spieler"].dropna().astype(str).unique() if str(p).strip()]
+all_players = sorted(all_players)
+
+# Debug info (can be removed later)
+if all_players:
+    st.sidebar.success(f"✓ {len(all_players)} Spieler gefunden")
+    st.sidebar.write("Spieler:", ", ".join(all_players))
+else:
+    st.sidebar.warning("Keine Spieler gefunden")
+    st.sidebar.write(f"CSV geladen: {len(df_all)} Zeilen")
+    if not df_all.empty:
+        st.sidebar.write("Erste Zeile Spieler-Spalte:", df_all["Spieler"].iloc[0] if len(df_all) > 0 else "leer")
+
 sel_mode = st.radio("Spieler auswählen oder neu eingeben", ["Vorhandener Spieler","Neuer Spieler"])
 
-if sel_mode == "Vorhandener Spieler" and all_players:
-    sel_player = st.selectbox("Spieler", all_players)
+if sel_mode == "Vorhandener Spieler":
+    if all_players:
+        sel_player = st.selectbox("Spieler", all_players)
+    else:
+        st.warning("Keine vorhandenen Spieler gefunden. Bitte 'Neuer Spieler' wählen.")
+        sel_player = ""
 else:
     sel_player = st.text_input("Neuer Spielername").strip()
 
@@ -104,14 +136,16 @@ st.write("**Hinweise:**", notes or "-")
 if st.button("✅ Bestätigen und Speichern"):
     new_row = pd.DataFrame([{
         "Spieler": sel_player,
-        "BlockedRanges": ";".join([f"{v.strftime('%Y-%m-%d')}→{b.strftime('%Y-%m-%d')}" for (v, b) in blocked_ranges]),
-        "BlockedDays": ";".join(d.strftime("%Y-%m-%d") for d in blocked_days),
+        "ValidFrom": DATE_START.strftime("%Y-%m-%d"),
+        "ValidTo": DATE_END.strftime("%Y-%m-%d"),
         "AvailableDays": ";".join(avail_days),
         "Preference": pref,
+        "BlockedRanges": ";".join([f"{v.strftime('%Y-%m-%d')}→{b.strftime('%Y-%m-%d')}" for (v, b) in blocked_ranges]),
+        "BlockedDays": ";".join(d.strftime("%Y-%m-%d") for d in blocked_days),
         "Notes": notes,
         "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }])
-    df_all = df_all[df_all["Spieler"]!=sel_player].append(new_row, ignore_index=True)
+    df_all = pd.concat([df_all[df_all["Spieler"]!=sel_player], new_row], ignore_index=True)
     save_data(df_all)
     st.success("Gespeichert!")
     st.dataframe(df_all[df_all["Spieler"]==sel_player])
