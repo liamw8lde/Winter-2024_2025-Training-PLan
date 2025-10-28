@@ -180,6 +180,19 @@ st.session_state["csv_sha"] = current_sha
 if warn:
     st.warning(warn)
 
+# -------------------- Load player preferences from CSV --------------------
+@st.cache_data(show_spinner=False)
+def load_player_preferences():
+    """Load player preferences from Spieler_Preferences_2026.csv"""
+    try:
+        prefs_df = pd.read_csv("Spieler_Preferences_2026.csv", dtype=str)
+        return prefs_df
+    except Exception as e:
+        st.warning(f"Could not load player preferences: {e}. Using fallback.")
+        return pd.DataFrame()
+
+df_preferences = load_player_preferences()
+
 # -------------------- Top controls --------------------
 col_reload, col_ref = st.columns([1.5, 6])
 with col_reload:
@@ -192,8 +205,108 @@ with col_ref:
 # =============== RULE SOURCES (HARD where stated) =============
 # ==============================================================
 
-# ---- Jotform weekday availability (treated as HARD here) ----
-JOTFORM = {
+# ---- Dynamic player availability and holidays from CSV ----
+def get_available_days_from_csv(df_prefs):
+    """Extract available days for each player from preferences CSV"""
+    jotform = {}
+    if df_prefs.empty:
+        return {}
+
+    for _, row in df_prefs.iterrows():
+        name = str(row.get("Spieler", "")).strip()
+        if not name:
+            continue
+        days_str = str(row.get("AvailableDays", ""))
+        # Handle both comma and semicolon separators
+        days = set()
+        for sep in [",", ";"]:
+            if sep in days_str:
+                days = {d.strip() for d in days_str.split(sep) if d.strip()}
+                break
+        else:
+            if days_str.strip():
+                days = {days_str.strip()}
+        jotform[name] = days
+    return jotform
+
+def get_player_preferences_from_csv(df_prefs):
+    """Extract player type preferences (nur Einzel/nur Doppel/keine Präferenz)"""
+    prefs = {}
+    if df_prefs.empty:
+        return {}
+
+    for _, row in df_prefs.iterrows():
+        name = str(row.get("Spieler", "")).strip()
+        if not name:
+            continue
+        pref = str(row.get("Preference", "keine Präferenz")).strip()
+        prefs[name] = pref
+    return prefs
+
+def parse_blocked_ranges_from_csv(blocked_str):
+    """Parse blocked date ranges like '2026-01-01→2026-01-04' from CSV"""
+    periods = []
+    if not blocked_str or pd.isna(blocked_str) or str(blocked_str).strip() == "":
+        return periods
+
+    for chunk in str(blocked_str).split(";"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if "→" in chunk:
+            try:
+                s, e = [x.strip() for x in chunk.split("→", 1)]
+                sd = datetime.strptime(s, "%Y-%m-%d").date()
+                ed = datetime.strptime(e, "%Y-%m-%d").date()
+                periods.append((sd, ed))
+            except Exception:
+                pass
+    return periods
+
+def parse_blocked_days_from_csv(blocked_str):
+    """Parse individual blocked days from CSV"""
+    periods = []
+    if not blocked_str or pd.isna(blocked_str) or str(blocked_str).strip() == "":
+        return periods
+
+    for chunk in str(blocked_str).split(";"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            d = datetime.strptime(chunk, "%Y-%m-%d").date()
+            periods.append((d, d))
+        except Exception:
+            pass
+    return periods
+
+def load_holidays_from_csv(df_prefs):
+    """Load all holidays from preferences CSV"""
+    holidays = {}
+    if df_prefs.empty:
+        return {}
+
+    for _, row in df_prefs.iterrows():
+        name = str(row.get("Spieler", "")).strip()
+        if not name:
+            continue
+
+        blocked_ranges = parse_blocked_ranges_from_csv(row.get("BlockedRanges", ""))
+        blocked_days = parse_blocked_days_from_csv(row.get("BlockedDays", ""))
+
+        all_periods = blocked_ranges + blocked_days
+        if all_periods:
+            holidays[name] = holidays.get(name, []) + all_periods
+
+    return holidays
+
+# Load dynamic data from CSV (with fallback to old hard-coded values)
+JOTFORM = get_available_days_from_csv(df_preferences)
+PLAYER_TYPE_PREFERENCES = get_player_preferences_from_csv(df_preferences)
+HOLIDAYS_FROM_CSV = load_holidays_from_csv(df_preferences)
+
+# ---- Fallback: Old hard-coded Jotform data (only if CSV fails) ----
+JOTFORM_FALLBACK = {
     "Andreas Dank": {"Montag", "Mittwoch"},
     "Anke Ihde": {"Montag", "Mittwoch", "Donnerstag"},
     "Arndt Stueber": {"Mittwoch"},
@@ -237,6 +350,10 @@ JOTFORM = {
     "Torsten Bartel": {"Montag", "Mittwoch", "Donnerstag"},
     "Wolfgang Aleksik": {"Mittwoch"},
 }
+
+# Use CSV data if available, otherwise fall back
+if not JOTFORM:
+    JOTFORM = JOTFORM_FALLBACK
 
 # ---- Player Ranks (1 strongest ... 6 weakest) ----
 RANK = {
@@ -357,8 +474,11 @@ HOLIDAYS = parse_holidays(RAW_HOLIDAYS)
 def is_holiday(name: str, d: date) -> bool:
     if (d.month, d.day) in BLACKOUT_MMDD:
         return True
-    ranges = HOLIDAYS.get(name, [])
-    return any(start <= d <= end for (start, end) in ranges)
+    # Merge old hard-coded holidays with CSV holidays (CSV takes priority)
+    csv_ranges = HOLIDAYS_FROM_CSV.get(name, [])
+    old_ranges = HOLIDAYS.get(name, [])
+    all_ranges = csv_ranges if csv_ranges else old_ranges
+    return any(start <= d <= end for (start, end) in all_ranges)
 
 # -------------------- Rank & protected helpers --------------------
 WOMEN_SINGLE_BAN = {"Anke Ihde", "Lena Meiss", "Martina Schmidt", "Kerstin Baarck"}
@@ -421,6 +541,14 @@ def protected_player_violations(name: str, tag: str, s_time: str, typ: str,
         v.append(f"{name}: nur Mittwoch 19:00.")
     if typ.lower().startswith("einzel") and name in WOMEN_SINGLE_BAN:
         v.append(f"{name}: Frauen dürfen kein Einzel spielen.")
+
+    # Check player type preferences from CSV
+    pref = PLAYER_TYPE_PREFERENCES.get(name, "keine Präferenz")
+    if pref == "nur Einzel" and typ.lower().startswith("doppel"):
+        v.append(f"{name}: möchte nur Einzel spielen.")
+    elif pref == "nur Doppel" and typ.lower().startswith("einzel"):
+        v.append(f"{name}: möchte nur Doppel spielen.")
+
     return v
 
 # ==============================================================
@@ -610,10 +738,197 @@ def compute_player_costs(df: pd.DataFrame, df_exp: pd.DataFrame):
     return per_player.sort_values(["Gesamt (€)", "Spieler"]), totals, allowed_calendar
 
 # ==============================================================
+# ============== AUTOPOPULATION ALGORITHM ======================
+# ==============================================================
+
+def get_all_players_from_csv():
+    """Get list of all players from preferences CSV, falling back to plan if needed"""
+    if not df_preferences.empty:
+        players = df_preferences["Spieler"].dropna().unique().tolist()
+        return sorted([str(p).strip() for p in players if str(p).strip()])
+    # Fallback to players in current plan
+    return sorted(p for p in df_exp["Spieler_Name"].dropna().unique().tolist() if str(p).strip())
+
+def find_empty_slots(df_plan: pd.DataFrame):
+    """Find all allowed slots that are not yet filled in the plan"""
+    allowed_calendar = pd.DataFrame(_generate_allowed_slots_calendar(df_plan))
+    if allowed_calendar.empty:
+        return []
+
+    # Create set of (date, slot) pairs that exist in the plan
+    used_pairs = set(zip(pd.to_datetime(df_plan["Datum_dt"]).dt.date, df_plan["Slot"]))
+
+    # Find empty slots
+    empty_slots = []
+    for _, row in allowed_calendar.iterrows():
+        pair = (row["Datum"], row["Slot"])
+        if pair not in used_pairs:
+            empty_slots.append({
+                "Datum": row["Datum"],
+                "Tag": row["Tag"],
+                "Slot": row["Slot"],
+                "Typ": row["Typ"],
+                "Minutes": row["Minutes"],
+            })
+
+    return empty_slots
+
+def select_players_for_slot(df_plan: pd.DataFrame, slot_info: dict, prefer_balanced: bool = True):
+    """
+    Select appropriate players for a given empty slot using load balancing.
+
+    Args:
+        df_plan: Current plan DataFrame
+        slot_info: Dict with Datum, Tag, Slot, Typ info
+        prefer_balanced: If True, prioritize least-used players
+
+    Returns:
+        List of player names or None if unable to fill
+    """
+    datum = slot_info["Datum"]
+    tag = slot_info["Tag"]
+    slot_code = slot_info["Slot"]
+    typ = slot_info["Typ"]
+
+    # Extract time from slot code (e.g., "D20:00-120 PLA" -> "20:00")
+    time_match = re.search(r"(\d{2}:\d{2})", slot_code)
+    slot_time = time_match.group(1) if time_match else "00:00"
+
+    # Determine how many players we need
+    num_players = 4 if typ.lower().startswith("doppel") else 2
+
+    # Get all eligible players
+    all_players = get_all_players_from_csv()
+    candidates = []
+
+    for name in all_players:
+        y, w = week_of(datum)
+        wk = df_plan[(df_plan["Jahr"] == y) & (df_plan["Woche"] == w)]
+        week_count = int(wk["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum())
+        season_count = int(df_plan["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum())
+        rk = RANK.get(name, 999)
+
+        # Check violations
+        viol = _violations_if_added(df_plan, name, tag, slot_time, typ, datum)
+
+        candidates.append({
+            "name": name,
+            "week": week_count,
+            "season": season_count,
+            "rank": rk,
+            "violations": viol,
+            "has_violations": len(viol) > 0,
+        })
+
+    # Filter by player preference (nur Einzel/nur Doppel)
+    filtered_candidates = []
+    for c in candidates:
+        pref = PLAYER_TYPE_PREFERENCES.get(c["name"], "keine Präferenz")
+        if pref == "nur Einzel" and typ.lower().startswith("doppel"):
+            continue
+        if pref == "nur Doppel" and typ.lower().startswith("einzel"):
+            continue
+        filtered_candidates.append(c)
+
+    # Sort by violations (legal first), then by usage (season, week), then rank
+    if prefer_balanced:
+        filtered_candidates.sort(key=lambda x: (x["has_violations"], x["season"], x["week"], x["rank"], x["name"]))
+    else:
+        filtered_candidates.sort(key=lambda x: (x["has_violations"], x["rank"], x["name"]))
+
+    # Select players
+    if typ.lower().startswith("einzel"):
+        # Einzel: need 2 players with rank difference ≤ 2
+        return _select_singles_pair(filtered_candidates)
+    else:
+        # Doppel: need 4 players
+        return _select_doubles_team(filtered_candidates, num_players)
+
+def _select_singles_pair(candidates):
+    """Select 2 players for singles match with rank difference ≤ 2"""
+    # Try to find legal pairs first
+    for i, c1 in enumerate(candidates):
+        if c1["has_violations"]:
+            break  # Only consider legal players for first pass
+        for c2 in candidates[i+1:]:
+            if c2["has_violations"]:
+                break
+            r1 = c1["rank"]
+            r2 = c2["rank"]
+            if r1 != 999 and r2 != 999 and abs(r1 - r2) <= 2:
+                return [c1["name"], c2["name"]]
+
+    # If no legal pair found, return None
+    return None
+
+def _select_doubles_team(candidates, num_players):
+    """Select 4 players for doubles match"""
+    # Filter to only legal players first
+    legal = [c for c in candidates if not c["has_violations"]]
+
+    if len(legal) >= num_players:
+        return [c["name"] for c in legal[:num_players]]
+
+    # If not enough legal players, return None
+    return None
+
+def autopopulate_plan(df_plan: pd.DataFrame, max_slots: int = None, only_legal: bool = True):
+    """
+    Autopopulate empty slots in the training plan.
+
+    Args:
+        df_plan: Current plan DataFrame
+        max_slots: Maximum number of slots to fill (None = fill all)
+        only_legal: If True, only fill slots where all players are legal (no violations)
+
+    Returns:
+        Updated DataFrame with new assignments
+    """
+    df_result = df_plan.copy()
+    empty_slots = find_empty_slots(df_result)
+
+    filled_count = 0
+    filled_slots = []
+    skipped_slots = []
+
+    for slot_info in empty_slots:
+        if max_slots and filled_count >= max_slots:
+            break
+
+        players = select_players_for_slot(df_result, slot_info, prefer_balanced=True)
+
+        if players is None or (only_legal and any(_violations_if_added(df_result, p, slot_info["Tag"],
+                                                   re.search(r"(\d{2}:\d{2})", slot_info["Slot"]).group(1),
+                                                   slot_info["Typ"], slot_info["Datum"]) for p in players)):
+            skipped_slots.append(slot_info)
+            continue
+
+        # Add new row to plan
+        new_row = {
+            "Datum": slot_info["Datum"].strftime("%Y-%m-%d"),
+            "Tag": slot_info["Tag"],
+            "Slot": slot_info["Slot"],
+            "Typ": slot_info["Typ"],
+            "Spieler": ", ".join(players),
+        }
+
+        # Append to dataframe
+        new_row_df = pd.DataFrame([new_row])
+        df_result = pd.concat([df_result, new_row_df], ignore_index=True)
+
+        # Reprocess to update computed columns
+        df_result, _ = _postprocess(df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]])
+
+        filled_count += 1
+        filled_slots.append({**slot_info, "players": players})
+
+    return df_result, filled_slots, skipped_slots
+
+# ==============================================================
 # =========================  UI  ===============================
 # ==============================================================
 
-tab1, tab2, tab3, tab4 = st.tabs(["Wochenplan", "Spieler-Matches", "Plan bearbeiten", "Spieler-Kosten"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Wochenplan", "Spieler-Matches", "Plan bearbeiten", "Spieler-Kosten", "Auto-Population"])
 
 with tab1:
     weeks_df = (
@@ -1033,3 +1348,157 @@ with tab4:
             st.dataframe(show_df.sort_values(["Datum", "Tag", "Slot"]), width="stretch")
         else:
             st.info("Kein Slot-Kalender generiert (fehlende Saisondaten).")
+
+# ============================ TAB 5: AUTO-POPULATION ============================
+with tab5:
+    st.header("Auto-Population: Leere Slots automatisch füllen")
+    st.caption("Nutzt CSV-Präferenzen, Verfügbarkeit, Urlaube und Load-Balancing, um leere Slots fair zu füllen.")
+
+    if not check_edit_password():
+        st.stop()
+
+    # Initialize working copy
+    if "df_autofill" not in st.session_state:
+        st.session_state.df_autofill = df.copy()
+
+    df_autofill = st.session_state.df_autofill
+
+    # Find empty slots
+    empty_slots = find_empty_slots(df_autofill)
+
+    st.subheader("Leere Slots")
+    st.write(f"**{len(empty_slots)}** leere Slots gefunden.")
+
+    if empty_slots:
+        # Show sample of empty slots
+        with st.expander(f"Zeige die ersten {min(10, len(empty_slots))} leeren Slots"):
+            sample_slots = empty_slots[:10]
+            for slot in sample_slots:
+                st.write(f"- {slot['Datum']} ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
+
+        st.markdown("---")
+        st.subheader("Auto-Population Einstellungen")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            max_slots = st.number_input(
+                "Max. Anzahl Slots zu füllen",
+                min_value=1,
+                max_value=len(empty_slots),
+                value=min(10, len(empty_slots)),
+                help="Anzahl der Slots, die automatisch gefüllt werden sollen"
+            )
+        with col2:
+            only_legal = st.checkbox(
+                "Nur legale Zuweisungen (keine Regelverstöße)",
+                value=True,
+                help="Wenn aktiviert, werden nur Slots gefüllt, bei denen alle Spieler keine Regelverstöße haben"
+            )
+
+        st.markdown("---")
+
+        # Preview mode
+        if st.button("🔍 Vorschau generieren (ohne Speichern)", key="btn_autofill_preview"):
+            with st.spinner("Generiere Auto-Population..."):
+                df_result, filled_slots, skipped_slots = autopopulate_plan(
+                    df_autofill, max_slots=max_slots, only_legal=only_legal
+                )
+                st.session_state.df_autofill_result = df_result
+                st.session_state.filled_slots = filled_slots
+                st.session_state.skipped_slots = skipped_slots
+
+        # Show results
+        if "df_autofill_result" in st.session_state:
+            filled = st.session_state.get("filled_slots", [])
+            skipped = st.session_state.get("skipped_slots", [])
+
+            st.success(f"✅ **{len(filled)}** Slots erfolgreich gefüllt!")
+            if skipped:
+                st.warning(f"⚠️ **{len(skipped)}** Slots übersprungen (keine geeigneten Spieler gefunden)")
+
+            # Show filled slots
+            if filled:
+                with st.expander(f"✅ Gefüllte Slots anzeigen ({len(filled)})"):
+                    for slot in filled:
+                        players_str = ", ".join(slot["players"])
+                        st.write(f"- **{slot['Datum']}** ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}  \n  → {players_str}")
+
+            # Show skipped slots
+            if skipped:
+                with st.expander(f"⚠️ Übersprungene Slots anzeigen ({len(skipped)})"):
+                    for slot in skipped:
+                        st.write(f"- {slot['Datum']} ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
+
+            st.markdown("---")
+            st.subheader("Vorschau des aktualisierten Plans")
+
+            # Show statistics comparison
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Vorher: Slots", len(df_autofill))
+            with col2:
+                st.metric("Nachher: Slots", len(st.session_state.df_autofill_result))
+            with col3:
+                st.metric("Hinzugefügt", len(filled), delta=len(filled))
+
+            # Show player statistics
+            st.subheader("Spieler-Verteilung nach Auto-Population")
+            df_result_exp = st.session_state.df_autofill_result.explode("Spieler_list").rename(columns={"Spieler_list": "Spieler_Name"})
+            player_counts = df_result_exp["Spieler_Name"].value_counts().reset_index()
+            player_counts.columns = ["Spieler", "Anzahl Matches"]
+            st.dataframe(player_counts, width="stretch")
+
+            # Save button
+            st.markdown("---")
+            if st.button("💾 Plan speichern und auf GitHub hochladen", key="btn_autofill_save"):
+                try:
+                    df_to_save = st.session_state.df_autofill_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]]
+                    csv_bytes = df_to_save.to_csv(index=False).encode("utf-8")
+                    msg = f"Auto-populated {len(filled)} slots using load balancing and preferences"
+                    res = github_put_file(csv_bytes, msg, branch_override=st.secrets.get("GITHUB_BRANCH", "main"))
+                    new_ref = (res.get("commit") or {}).get("sha")
+                    st.session_state["csv_ref"] = new_ref or st.secrets.get("GITHUB_BRANCH", "main")
+                    st.success("✅ Plan erfolgreich gespeichert!")
+                    st.cache_data.clear()
+                    # Clear autofill state
+                    st.session_state.pop("df_autofill", None)
+                    st.session_state.pop("df_autofill_result", None)
+                    st.session_state.pop("filled_slots", None)
+                    st.session_state.pop("skipped_slots", None)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Speichern fehlgeschlagen: {e}")
+
+            # Reset button
+            if st.button("↩️ Vorschau verwerfen", key="btn_autofill_reset"):
+                st.session_state.pop("df_autofill_result", None)
+                st.session_state.pop("filled_slots", None)
+                st.session_state.pop("skipped_slots", None)
+                st.rerun()
+
+    else:
+        st.info("🎉 Keine leeren Slots gefunden! Der Plan ist vollständig.")
+
+    # Documentation
+    with st.expander("ℹ️ Wie funktioniert Auto-Population?"):
+        st.markdown("""
+        **Auto-Population-Algorithmus:**
+
+        1. **Leere Slots identifizieren:** Findet alle erlaubten Slots, die noch nicht im Plan sind
+        2. **Spieler-Kandidaten bewerten:**
+           - Prüft Verfügbarkeit (Wochentag, Urlaube)
+           - Prüft Präferenzen (nur Einzel/nur Doppel)
+           - Prüft geschützte Spieler-Regeln
+           - Zählt bisherige Einsätze (Woche & Saison)
+        3. **Load Balancing:** Priorisiert Spieler mit weniger Einsätzen
+        4. **Regelkonformität:**
+           - Einzel: Rang-Unterschied ≤ 2
+           - Doppel: 4 verfügbare Spieler
+        5. **Zuweisung:** Füllt Slots mit am wenigsten genutzten, legalen Spielern
+
+        **Datenquellen:**
+        - `Spieler_Preferences_2026.csv`: Verfügbarkeit, Präferenzen, Urlaube
+        - `RANK`: Spieler-Rankings
+        - Geschützte Regeln: Spezielle Zeitfenster für bestimmte Spieler
+        """)
+
