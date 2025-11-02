@@ -588,7 +588,7 @@ st.markdown("---")
 # Current status
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("Aktueller Plan", f"{len(df_plan)} Slots")
+    st.metric("Aktueller Plan", f"{len(st.session_state.df_work)} Slots")
 with col2:
     st.metric("Spieler verfügbar", len(all_players))
 with col3:
@@ -597,6 +597,31 @@ with col3:
 with col4:
     total_possible = len(generate_allowed_slots_calendar_2026())
     st.metric("Gesamt möglich", total_possible)
+
+# Clear plan button
+if len(st.session_state.df_work) > 0:
+    col_clear, col_spacer = st.columns([1, 3])
+    with col_clear:
+        if st.button("🗑️ Plan leeren", use_container_width=True, type="secondary"):
+            # Store confirmation state
+            st.session_state.show_clear_confirm = True
+
+    # Confirmation dialog
+    if st.session_state.get("show_clear_confirm", False):
+        st.warning("⚠️ **Warnung:** Dies löscht alle {0} Slots aus dem aktuellen Plan!".format(len(st.session_state.df_work)))
+        col_yes, col_no, col_space = st.columns([1, 1, 2])
+        with col_yes:
+            if st.button("✅ Ja, leeren", use_container_width=True, type="primary"):
+                # Create empty dataframe with correct structure
+                empty_plan = pd.DataFrame(columns=["Datum", "Tag", "Slot", "Typ", "Spieler"])
+                st.session_state.df_work, _ = postprocess_plan(empty_plan)
+                st.session_state.show_clear_confirm = False
+                st.success("✅ Plan geleert! Bereit für Autopopulation.")
+                st.rerun()
+        with col_no:
+            if st.button("❌ Abbrechen", use_container_width=True):
+                st.session_state.show_clear_confirm = False
+                st.rerun()
 
 st.markdown("---")
 
