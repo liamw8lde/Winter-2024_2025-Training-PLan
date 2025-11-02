@@ -581,6 +581,43 @@ else:
 if "df_work" not in st.session_state:
     st.session_state.df_work = df_plan.copy()
 
+# ==================== SPREADSHEET VIEW FUNCTION ====================
+def create_player_calendar_view(df_plan):
+    """Create a pivot table with dates as rows and players as columns"""
+    if df_plan.empty or len(df_plan) == 0:
+        return pd.DataFrame()
+
+    # Explode to get one row per player
+    _, df_exp = postprocess_plan(df_plan[["Datum", "Tag", "Slot", "Typ", "Spieler"]])
+
+    if df_exp.empty:
+        return pd.DataFrame()
+
+    # Create display value: Court + Time
+    df_exp["Court_Time"] = df_exp.apply(
+        lambda row: f"{row['S_Court']} {row['S_Time']}-{row['S_Dur']}min"
+        if row['S_Court'] and row['S_Time'] else "",
+        axis=1
+    )
+
+    # Convert date to string for display
+    df_exp["Datum_str"] = df_exp["Datum_dt"].dt.strftime("%d.%m.%Y (%a)")
+
+    # Create pivot table
+    pivot = df_exp.pivot_table(
+        index="Datum_str",
+        columns="Spieler_Name",
+        values="Court_Time",
+        aggfunc=lambda x: " | ".join(x) if len(x) > 1 else x.iloc[0],
+        fill_value=""
+    )
+
+    # Sort by date (need to use original datetime for sorting)
+    date_mapping = dict(zip(df_exp["Datum_str"], df_exp["Datum_dt"]))
+    pivot = pivot.loc[sorted(pivot.index, key=lambda x: date_mapping.get(x, pd.Timestamp.min))]
+
+    return pivot
+
 # ==================== UI ====================
 st.info(f"📅 **Saison:** {SEASON_START.strftime('%d.%m.%Y')} bis {SEASON_END.strftime('%d.%m.%Y')} (Januar - April 2026)")
 st.markdown("---")
@@ -625,158 +662,192 @@ if len(st.session_state.df_work) > 0:
 
 st.markdown("---")
 
-# Find empty slots
-empty_slots = find_empty_slots(st.session_state.df_work)
+# Create tabs
+tab_auto, tab_calendar = st.tabs(["🤖 Auto-Population", "📅 Spieler-Kalender"])
 
-if empty_slots:
-    st.header("📋 Leere Slots für 2026")
-    st.write(f"Es gibt **{len(empty_slots)}** leere Slots, die gefüllt werden können.")
+with tab_calendar:
+    st.header("📅 Spieler-Kalender Übersicht")
+    st.caption("Zeigt wann welcher Spieler auf welchem Platz spielt")
 
-    # Show sample
-    with st.expander(f"Zeige erste {min(20, len(empty_slots))} leere Slots"):
-        for i, slot in enumerate(empty_slots[:20]):
-            st.write(f"{i+1}. {slot['Datum']} ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
+    # Use working plan or result plan if available
+    display_df = st.session_state.get("df_result", st.session_state.df_work)
 
-    st.markdown("---")
+    if len(display_df) == 0:
+        st.info("📭 Der Plan ist noch leer. Verwende die Auto-Population, um Slots zu füllen.")
+    else:
+        pivot_df = create_player_calendar_view(display_df)
 
-    # Settings
-    st.header("⚙️ Auto-Population Einstellungen")
+        if not pivot_df.empty:
+            st.dataframe(
+                pivot_df,
+                use_container_width=True,
+                height=600
+            )
 
-    col1, col2 = st.columns(2)
-    with col1:
-        max_slots = st.number_input(
-            "Maximale Anzahl Slots zu füllen",
-            min_value=1,
-            max_value=len(empty_slots),
-            value=min(50, len(empty_slots)),
-            help="Wie viele Slots sollen automatisch gefüllt werden?"
-        )
-    with col2:
-        only_legal = st.checkbox(
-            "Nur legale Zuweisungen (keine Verstöße)",
-            value=True,
-            help="Wenn aktiv, werden nur Slots mit 100% regelkonformen Spielern gefüllt"
-        )
+            # Download option
+            csv_bytes = pivot_df.to_csv().encode("utf-8")
+            st.download_button(
+                "📥 Kalender-Ansicht als CSV herunterladen",
+                data=csv_bytes,
+                file_name="Spieler_Kalender_2026.csv",
+                mime="text/csv"
+            )
+        else:
+            st.warning("⚠️ Konnte keine Kalenderansicht erstellen.")
 
-    st.markdown("---")
+with tab_auto:
+    # Find empty slots
+    empty_slots = find_empty_slots(st.session_state.df_work)
 
-    # Actions
-    col_preview, col_reset = st.columns(2)
-    with col_preview:
-        if st.button("🔍 Vorschau generieren", use_container_width=True, type="primary"):
-            with st.spinner("Generiere Auto-Population für 2026..."):
-                df_result, filled, skipped = autopopulate_plan(
-                    st.session_state.df_work,
-                    max_slots,
-                    only_legal,
-                    all_players,
-                    available_days,
-                    preferences,
-                    holidays
-                )
-                st.session_state.df_result = df_result
-                st.session_state.filled_slots = filled
-                st.session_state.skipped_slots = skipped
-                st.rerun()
+    if empty_slots:
+        st.header("📋 Leere Slots für 2026")
+        st.write(f"Es gibt **{len(empty_slots)}** leere Slots, die gefüllt werden können.")
 
-    with col_reset:
-        if st.button("🔄 Plan zurücksetzen", use_container_width=True):
-            st.session_state.df_work = df_plan.copy()
-            st.session_state.pop("df_result", None)
-            st.session_state.pop("filled_slots", None)
-            st.session_state.pop("skipped_slots", None)
-            st.rerun()
+        # Show sample
+        with st.expander(f"Zeige erste {min(20, len(empty_slots))} leere Slots"):
+            for i, slot in enumerate(empty_slots[:20]):
+                st.write(f"{i+1}. {slot['Datum']} ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
 
-    # Show results if available
-    if "df_result" in st.session_state:
         st.markdown("---")
-        st.header("✅ Ergebnisse für 2026")
 
-        filled = st.session_state.get("filled_slots", [])
-        skipped = st.session_state.get("skipped_slots", [])
+        # Settings
+        st.header("⚙️ Auto-Population Einstellungen")
 
         col1, col2 = st.columns(2)
         with col1:
-            st.success(f"**{len(filled)}** Slots erfolgreich gefüllt")
+            max_slots = st.number_input(
+                "Maximale Anzahl Slots zu füllen",
+                min_value=1,
+                max_value=len(empty_slots),
+                value=min(50, len(empty_slots)),
+                help="Wie viele Slots sollen automatisch gefüllt werden?"
+            )
         with col2:
-            if skipped:
-                st.warning(f"**{len(skipped)}** Slots übersprungen")
-
-        # Filled slots details
-        if filled:
-            with st.expander(f"✅ Gefüllte Slots ({len(filled)})"):
-                for slot in filled:
-                    players_str = ", ".join(slot["players"])
-                    st.write(f"**{slot['Datum']}** ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
-                    st.write(f"  → {players_str}")
-                    st.write("")
-
-        # Skipped slots details
-        if skipped:
-            with st.expander(f"⚠️ Übersprungene Slots ({len(skipped)})"):
-                for slot in skipped:
-                    st.write(f"• {slot['Datum']} ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
-
-        # Statistics
-        st.markdown("---")
-        st.subheader("📊 Statistiken")
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Vorher", len(st.session_state.df_work))
-        with col2:
-            st.metric("Nachher", len(st.session_state.df_result))
-        with col3:
-            st.metric("Hinzugefügt", len(filled), delta=f"+{len(filled)}")
-
-        # Player distribution
-        st.subheader("👥 Spieler-Verteilung 2026")
-        _, df_result_exp = postprocess_plan(st.session_state.df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]])
-        player_counts = df_result_exp["Spieler_Name"].value_counts().reset_index()
-        player_counts.columns = ["Spieler", "Anzahl Matches"]
-        st.dataframe(player_counts, use_container_width=True, height=400)
-
-        # Save buttons
-        st.markdown("---")
-        col_save, col_download, col_discard = st.columns(3)
-
-        with col_save:
-            if st.button("💾 Auf GitHub speichern (2026)", use_container_width=True, type="primary"):
-                try:
-                    df_to_save = st.session_state.df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]]
-                    csv_bytes = df_to_save.to_csv(index=False).encode("utf-8")
-                    msg = f"Auto-populate {len(filled)} slots for 2026 season\n\n🤖 Generated with Claude Code"
-                    github_put_file(csv_bytes, msg, PLAN_FILE)
-                    st.success(f"✅ Erfolgreich auf GitHub als {PLAN_FILE} gespeichert!")
-                    st.balloons()
-                    # Clear state
-                    st.session_state.df_work = st.session_state.df_result.copy()
-                    st.session_state.pop("df_result", None)
-                    st.session_state.pop("filled_slots", None)
-                    st.session_state.pop("skipped_slots", None)
-                except Exception as e:
-                    st.error(f"Fehler beim Speichern: {e}")
-
-        with col_download:
-            df_to_save = st.session_state.df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]]
-            csv_bytes = df_to_save.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "📥 CSV herunterladen",
-                data=csv_bytes,
-                file_name="Winterplan_2026_autopopulated.csv",
-                mime="text/csv",
-                use_container_width=True
+            only_legal = st.checkbox(
+                "Nur legale Zuweisungen (keine Verstöße)",
+                value=True,
+                help="Wenn aktiv, werden nur Slots mit 100% regelkonformen Spielern gefüllt"
             )
 
-        with col_discard:
-            if st.button("🗑️ Vorschau verwerfen", use_container_width=True):
+        st.markdown("---")
+
+        # Actions
+        col_preview, col_reset = st.columns(2)
+        with col_preview:
+            if st.button("🔍 Vorschau generieren", use_container_width=True, type="primary"):
+                with st.spinner("Generiere Auto-Population für 2026..."):
+                    df_result, filled, skipped = autopopulate_plan(
+                        st.session_state.df_work,
+                        max_slots,
+                        only_legal,
+                        all_players,
+                        available_days,
+                        preferences,
+                        holidays
+                    )
+                    st.session_state.df_result = df_result
+                    st.session_state.filled_slots = filled
+                    st.session_state.skipped_slots = skipped
+                    st.rerun()
+
+        with col_reset:
+            if st.button("🔄 Plan zurücksetzen", use_container_width=True):
+                st.session_state.df_work = df_plan.copy()
                 st.session_state.pop("df_result", None)
                 st.session_state.pop("filled_slots", None)
                 st.session_state.pop("skipped_slots", None)
                 st.rerun()
 
-else:
-    st.success("🎉 Keine leeren Slots für 2026 gefunden! Der Plan ist vollständig.")
+        # Show results if available
+        if "df_result" in st.session_state:
+            st.markdown("---")
+            st.header("✅ Ergebnisse für 2026")
+
+            filled = st.session_state.get("filled_slots", [])
+            skipped = st.session_state.get("skipped_slots", [])
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.success(f"**{len(filled)}** Slots erfolgreich gefüllt")
+            with col2:
+                if skipped:
+                    st.warning(f"**{len(skipped)}** Slots übersprungen")
+
+            # Filled slots details
+            if filled:
+                with st.expander(f"✅ Gefüllte Slots ({len(filled)})"):
+                    for slot in filled:
+                        players_str = ", ".join(slot["players"])
+                        st.write(f"**{slot['Datum']}** ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
+                        st.write(f"  → {players_str}")
+                        st.write("")
+
+            # Skipped slots details
+            if skipped:
+                with st.expander(f"⚠️ Übersprungene Slots ({len(skipped)})"):
+                    for slot in skipped:
+                        st.write(f"• {slot['Datum']} ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
+
+            # Statistics
+            st.markdown("---")
+            st.subheader("📊 Statistiken")
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Vorher", len(st.session_state.df_work))
+            with col2:
+                st.metric("Nachher", len(st.session_state.df_result))
+            with col3:
+                st.metric("Hinzugefügt", len(filled), delta=f"+{len(filled)}")
+
+            # Player distribution
+            st.subheader("👥 Spieler-Verteilung 2026")
+            _, df_result_exp = postprocess_plan(st.session_state.df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]])
+            player_counts = df_result_exp["Spieler_Name"].value_counts().reset_index()
+            player_counts.columns = ["Spieler", "Anzahl Matches"]
+            st.dataframe(player_counts, use_container_width=True, height=400)
+
+            # Save buttons
+            st.markdown("---")
+            col_save, col_download, col_discard = st.columns(3)
+
+            with col_save:
+                if st.button("💾 Auf GitHub speichern (2026)", use_container_width=True, type="primary"):
+                    try:
+                        df_to_save = st.session_state.df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]]
+                        csv_bytes = df_to_save.to_csv(index=False).encode("utf-8")
+                        msg = f"Auto-populate {len(filled)} slots for 2026 season\n\n🤖 Generated with Claude Code"
+                        github_put_file(csv_bytes, msg, PLAN_FILE)
+                        st.success(f"✅ Erfolgreich auf GitHub als {PLAN_FILE} gespeichert!")
+                        st.balloons()
+                        # Clear state
+                        st.session_state.df_work = st.session_state.df_result.copy()
+                        st.session_state.pop("df_result", None)
+                        st.session_state.pop("filled_slots", None)
+                        st.session_state.pop("skipped_slots", None)
+                    except Exception as e:
+                        st.error(f"Fehler beim Speichern: {e}")
+
+            with col_download:
+                df_to_save = st.session_state.df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]]
+                csv_bytes = df_to_save.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "📥 CSV herunterladen",
+                    data=csv_bytes,
+                    file_name="Winterplan_2026_autopopulated.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+
+            with col_discard:
+                if st.button("🗑️ Vorschau verwerfen", use_container_width=True):
+                    st.session_state.pop("df_result", None)
+                    st.session_state.pop("filled_slots", None)
+                    st.session_state.pop("skipped_slots", None)
+                    st.rerun()
+
+    else:
+        st.success("🎉 Keine leeren Slots für 2026 gefunden! Der Plan ist vollständig.")
 
 # Documentation
 st.markdown("---")
