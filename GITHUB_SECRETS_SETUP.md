@@ -59,15 +59,63 @@ GITHUB_BRANCH = "claude/autopopulate-training-plan-011CUZABKzQJ2UH9qQ3S5Syv"
 
 ## Fehlerbehebung
 
-### Token funktioniert nicht?
-- Stelle sicher, dass das Token die "repo" Berechtigung hat
-- Token darf keine Leerzeichen enthalten
-- Token muss in Anführungszeichen stehen
-
-### Datei nicht gefunden?
+### ✅ "No secrets found" → Datei wurde nicht gefunden
+**Lösung:** Prüfe den Dateipfad:
+- `C:\users\mount\documents\Winter-2024_2025-Training-PLan\.streamlit\secrets.toml`
 - Versteckte Dateien im Explorer anzeigen lassen
-- Oder verwende einen Code-Editor (VS Code, Notepad++) der `.streamlit` Ordner sieht
+
+### ❌ "401 Bad credentials" → Token ist ungültig
+**Mögliche Ursachen:**
+
+1. **Token hat nicht die richtige Berechtigung**
+   - Gehe zu https://github.com/settings/tokens
+   - Klicke auf dein Token
+   - Stelle sicher, dass **"repo"** angehakt ist ✓
+   - Wenn nicht: Lösche das Token und erstelle ein neues
+
+2. **Token wurde falsch kopiert**
+   - Öffne `secrets.toml`
+   - Prüfe die Zeile: `GITHUB_TOKEN = "ghp_..."`
+   - **Richtig:** `GITHUB_TOKEN = "ghp_abc123XYZ"`
+   - **Falsch:** `GITHUB_TOKEN = " ghp_abc123XYZ "` (Leerzeichen)
+   - **Falsch:** `GITHUB_TOKEN = ghp_abc123XYZ` (keine Anführungszeichen)
+   - **Falsch:** Mehrere Zeilen oder Zeilenumbrüche
+
+3. **Token-Typ ist falsch**
+   - Verwende **"Personal access tokens (classic)"**, NICHT "Fine-grained tokens"
+   - Classic Tokens beginnen mit `ghp_`
+   - Bei https://github.com/settings/tokens auf "Tokens (classic)" klicken
+
+4. **Token ist abgelaufen**
+   - GitHub Tokens können ein Ablaufdatum haben
+   - Lösche das alte Token und erstelle ein neues
+
+### Token neu erstellen (Schritt für Schritt)
+
+1. Gehe zu: https://github.com/settings/tokens
+2. Klicke auf **"Tokens (classic)"** (oben in der Leiste)
+3. Klicke **"Generate new token"** → **"Generate new token (classic)"**
+4. **Note:** "Tennis Plan App"
+5. **Expiration:** Wähle "No expiration" oder ein Datum in der Zukunft
+6. **Scopes:** Hake **nur "repo"** an (alle Unterpunkte werden automatisch angehakt)
+7. Scrolle nach unten, klicke **"Generate token"**
+8. **SOFORT kopieren!** Du siehst es nur einmal
+9. Öffne `.streamlit\secrets.toml`
+10. Ersetze die Zeile:
+    ```toml
+    GITHUB_TOKEN = "dein_neues_token_hier_einfügen"
+    ```
+11. Speichern und Streamlit neu starten
+
+### Testen des Tokens (Optional)
+
+Du kannst dein Token in der Kommandozeile testen:
+```bash
+curl -H "Authorization: Bearer ghp_deinToken" https://api.github.com/user
+```
+Wenn das Token funktioniert, siehst du deine GitHub-Benutzerinfos.
 
 ### Weiterhin Fehler?
-- Prüfe, ob du dich im richtigen Projektordner befindest
-- Stelle sicher, dass der Ordnername korrekt ist: `Winter-2024_2025-Training-PLan`
+- Prüfe, ob der Repository-Name korrekt ist: `liamw8lde/Winter-2024_2025-Training-PLan`
+- Stelle sicher, dass du Zugriff auf das Repository hast
+- Prüfe, ob der Branch existiert
