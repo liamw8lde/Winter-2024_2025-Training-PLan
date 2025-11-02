@@ -21,6 +21,7 @@ COURT_RATE_PER_HOUR = 17.50
 # 2026 SEASON SPECIFIC
 PLAN_FILE = "Winterplan_2026.csv"
 PREFS_FILE = "Spieler_Preferences_2026.csv"
+RANK_FILE = "Player_Ranks_2026.csv"
 SEASON_START = date(2026, 1, 5)  # First Monday of January 2026
 SEASON_END = date(2026, 4, 26)   # Last date in preferences
 
@@ -46,8 +47,8 @@ ALLOWED_SLOTS = {
 WEEKDAY_TO_ISO = {"Montag": 1, "Mittwoch": 3, "Donnerstag": 4}
 BLACKOUT_MMDD = {(12, 24), (12, 25), (12, 31)}
 
-# Player rankings (1 = strongest, 6 = weakest)
-RANK = {
+# Player rankings (1 = strongest, 6 = weakest) - FALLBACK if CSV fails
+RANK_FALLBACK = {
     "Andreas Dank": 5, "Anke Ihde": 6, "Arndt Stueber": 4, "Bernd Robioneck": 4, "Bernd Sotzek": 3,
     "Bjoern Junker": 1, "Carsten Gambal": 4, "Dirk Kistner": 5, "Frank Koller": 4, "Frank Petermann": 2,
     "Gunnar Brix": 6, "Heiko Thomsen": 4, "Jan Pappenheim": 5, "Jens Hafner": 6, "Jens Krause": 2,
@@ -81,6 +82,22 @@ def load_preferences_csv(file_path):
     except Exception as e:
         st.warning(f"Could not load preferences from {file_path}: {e}")
         return pd.DataFrame()
+
+@st.cache_data(show_spinner=False)
+def load_ranks_csv(file_path):
+    """Load player rankings from CSV (1=strongest, 6=weakest)"""
+    try:
+        df = pd.read_csv(file_path)
+        rank_dict = {}
+        for _, row in df.iterrows():
+            name = str(row.get("Spieler", "")).strip()
+            rank = row.get("Rank")
+            if name and pd.notna(rank):
+                rank_dict[name] = int(rank)
+        return rank_dict
+    except Exception as e:
+        st.warning(f"Could not load ranks from {file_path}: {e}. Using fallback.")
+        return RANK_FALLBACK
 
 def postprocess_plan(df):
     """Process plan DataFrame and add computed columns"""
@@ -541,6 +558,7 @@ if not check_password():
 with st.spinner("Lade 2026 Daten..."):
     df_plan, df_exp = load_plan_csv(PLAN_FILE)
     df_prefs = load_preferences_csv(PREFS_FILE)
+    RANK = load_ranks_csv(RANK_FILE)
 
 if df_plan is None:
     st.error(f"Konnte {PLAN_FILE} nicht laden!")
@@ -552,6 +570,12 @@ available_days = get_available_days(df_prefs)
 preferences = get_player_preferences(df_prefs)
 holidays = load_holidays(df_prefs)
 all_players = sorted(df_prefs["Spieler"].dropna().unique().tolist()) if not df_prefs.empty else []
+
+# Show rank source info
+if RANK == RANK_FALLBACK:
+    st.sidebar.warning(f"⚠️ Rankings from fallback (CSV not found)")
+else:
+    st.sidebar.success(f"✅ Rankings loaded from {RANK_FILE}")
 
 # Initialize state
 if "df_work" not in st.session_state:
@@ -740,6 +764,7 @@ with st.expander("ℹ️ Saison-Informationen 2026"):
     **Trainingsdateien:**
     - Plan: `{PLAN_FILE}`
     - Präferenzen: `{PREFS_FILE}`
+    - Rankings: `{RANK_FILE}` (1=stärkster, 6=schwächster)
 
     **Trainingstage:**
     - **Montag:** 2x Doppel (20:00-22:00)
@@ -757,5 +782,30 @@ with st.expander("ℹ️ Saison-Informationen 2026"):
     - Urlaube aus CSV (2026-01-01 bis 2026-04-26)
     - Spielerpräferenzen (nur Einzel/nur Doppel)
     - Verfügbarkeit nach Wochentagen
+    - Spieler-Rankings (Einzel: Rang-Differenz ≤ 2)
     - Load Balancing für faire Verteilung
     """)
+
+with st.expander("🏆 Spieler-Rankings"):
+    st.markdown("""
+    **Ranking-System:** 1 (stärkster) bis 6 (schwächster)
+
+    **Regel für Einzel:** Rang-Differenz zwischen Spielern ≤ 2
+
+    **Quelle:** `Player_Ranks_2026.csv` (aus audit prompt.txt)
+    """)
+
+    # Show rank distribution
+    rank_counts = {}
+    for player, rank in RANK.items():
+        rank_counts[rank] = rank_counts.get(rank, 0) + 1
+
+    rank_df = pd.DataFrame([
+        {"Rang": 1, "Beschreibung": "Stärkster", "Anzahl Spieler": rank_counts.get(1, 0)},
+        {"Rang": 2, "Beschreibung": "Sehr Stark", "Anzahl Spieler": rank_counts.get(2, 0)},
+        {"Rang": 3, "Beschreibung": "Stark", "Anzahl Spieler": rank_counts.get(3, 0)},
+        {"Rang": 4, "Beschreibung": "Überdurchschnittlich", "Anzahl Spieler": rank_counts.get(4, 0)},
+        {"Rang": 5, "Beschreibung": "Durchschnittlich", "Anzahl Spieler": rank_counts.get(5, 0)},
+        {"Rang": 6, "Beschreibung": "Schwächster", "Anzahl Spieler": rank_counts.get(6, 0)},
+    ])
+    st.dataframe(rank_df, use_container_width=True, hide_index=True)
