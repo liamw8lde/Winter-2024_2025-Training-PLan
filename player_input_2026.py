@@ -1,6 +1,7 @@
 
 import os
 import base64
+import subprocess
 from pathlib import Path
 
 import pandas as pd
@@ -44,11 +45,72 @@ def save_data(df):
     df.to_csv(CSV_PATH, index=False)
 
 
+def _get_streamlit_secret(key, default=""):
+    try:
+        if key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        # st.secrets is only available in Streamlit Cloud / deployed apps
+        pass
+    return default
+
+
+def _get_local_git_branch():
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(REPO_DIR), "rev-parse", "--abbrev-ref", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        branch = result.stdout.strip()
+        if branch and branch != "HEAD":
+            return branch
+    except Exception:
+        pass
+    return ""
+
+
 def get_github_defaults():
-    repo = os.getenv("GITHUB_REPOSITORY") or os.getenv("GITHUB_REPO") or ""
-    branch = os.getenv("GITHUB_BRANCH") or os.getenv("GIT_BRANCH") or "main"
-    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or ""
-    return repo, branch, token
+    repo = (
+        _get_streamlit_secret("GITHUB_REPO")
+        or os.getenv("GITHUB_REPOSITORY")
+        or os.getenv("GITHUB_REPO")
+        or ""
+    )
+    branch = (
+        _get_streamlit_secret("GITHUB_BRANCH")
+        or os.getenv("GITHUB_BRANCH")
+        or os.getenv("GIT_BRANCH")
+        or _get_local_git_branch()
+        or "main"
+    )
+    token = (
+        _get_streamlit_secret("GITHUB_TOKEN")
+        or os.getenv("GITHUB_TOKEN")
+        or os.getenv("GH_TOKEN")
+        or ""
+    )
+    path = _get_streamlit_secret("GITHUB_PATH", CSV_FILE)
+    committer_name = (
+        _get_streamlit_secret("GITHUB_COMMITTER_NAME")
+        or os.getenv("GITHUB_COMMITTER_NAME")
+        or ""
+    )
+    committer_email = (
+        _get_streamlit_secret("GITHUB_COMMITTER_EMAIL")
+        or os.getenv("GITHUB_COMMITTER_EMAIL")
+        or ""
+    )
+
+    return {
+        "repo": repo,
+        "branch": branch,
+        "token": token,
+        "path": path,
+        "committer_name": committer_name,
+        "committer_email": committer_email,
+    }
 
 
 def build_github_headers(token):
@@ -59,7 +121,16 @@ def build_github_headers(token):
     }
 
 
-def update_github_file_via_api(token, repo, path, content_bytes, message, branch="main"):
+def update_github_file_via_api(
+    token,
+    repo,
+    path,
+    content_bytes,
+    message,
+    branch="main",
+    committer=None,
+    author=None,
+):
     """Create or update a file in the GitHub repository using the REST API."""
     headers = build_github_headers(token)
     base_url = f"https://api.github.com/repos/{repo}/contents/{path}"
@@ -96,6 +167,16 @@ def update_github_file_via_api(token, repo, path, content_bytes, message, branch
         payload["branch"] = branch
     if sha:
         payload["sha"] = sha
+    if committer and committer.get("name") and committer.get("email"):
+        payload["committer"] = {
+            "name": committer["name"],
+            "email": committer["email"],
+        }
+    if author and author.get("name") and author.get("email"):
+        payload["author"] = {
+            "name": author["name"],
+            "email": author["email"],
+        }
 
     try:
         put_resp = requests.put(base_url, headers=headers, json=payload, timeout=10)
@@ -311,32 +392,97 @@ notes = st.text_area("Zusätzliche Hinweise", value=prev.get("Notes",""))
 st.subheader("GitHub-Synchronisierung")
 st.caption("🔐 Beim Speichern wird die CSV-Datei automatisch über die GitHub API aktualisiert.")
 
-default_repo, default_branch, default_token = get_github_defaults()
+github_defaults = get_github_defaults()
 
-st.session_state.setdefault("github_repo", default_repo)
-st.session_state.setdefault("github_branch", default_branch)
-st.session_state.setdefault("github_token", default_token)
+st.session_state.setdefault("github_repo", github_defaults["repo"])
+st.session_state.setdefault("github_branch", github_defaults["branch"])
+st.session_state.setdefault("github_path", github_defaults["path"])
+st.session_state.setdefault("github_committer_name", github_defaults["committer_name"])
+st.session_state.setdefault("github_committer_email", github_defaults["committer_email"])
+
+if "github_token_secret" not in st.session_state:
+    st.session_state["github_token_secret"] = github_defaults["token"]
+st.session_state.setdefault("github_token_manual", "")
+
+col_repo, col_branch = st.columns(2)
+with col_repo:
+    st.text_input(
+        "GitHub-Repository (owner/name)",
+        key="github_repo",
+        help="Beispiel: deinbenutzername/dein-repo",
+    )
+with col_branch:
+    st.text_input(
+        "Branch",
+        key="github_branch",
+        help="Ziel-Branch im Repository (Standard: main)",
+    )
+
+col_path, col_committer = st.columns([1, 1])
+with col_path:
+    st.text_input(
+        "Dateipfad im Repository",
+        key="github_path",
+        help="Pfad zur CSV-Datei im GitHub-Repository (z. B. Winterplan.csv)",
+    )
+with col_committer:
+    st.text_input(
+        "Commit-Name",
+        key="github_committer_name",
+        help="Name des Committers (z. B. Winterplan Bot)",
+    )
 
 st.text_input(
-    "GitHub-Repository (owner/name)",
-    key="github_repo",
-    help="Beispiel: deinbenutzername/dein-repo",
+    "Commit-E-Mail",
+    key="github_committer_email",
+    help="E-Mail des Committers",
 )
-st.text_input(
-    "Branch",
-    key="github_branch",
-    help="Ziel-Branch im Repository (Standard: main)",
-)
+
+token_help = "Token mit 'repo'-Berechtigung. Leer lassen, um das Secret zu verwenden." if st.session_state.get("github_token_secret") else "Token mit 'repo'-Berechtigung, um die Datei schreiben zu dürfen."
 st.text_input(
     "Personal Access Token",
-    key="github_token",
+    key="github_token_manual",
     type="password",
-    help="Token mit 'repo'-Berechtigung, um die Datei schreiben zu dürfen.",
+    help=token_help,
 )
 
-if not st.session_state.get("github_repo") or not st.session_state.get("github_token"):
+if st.session_state.get("github_token_secret"):
+    st.caption("🔒 Token wird aus st.secrets verwendet, sofern hier kein eigenes Token eingegeben wird.")
+
+if not st.session_state.get("github_repo") or not (
+    st.session_state.get("github_token_manual") or st.session_state.get("github_token_secret")
+):
     st.info(
         "Bitte Repository und Token angeben. Ohne diese Angaben wird nur die lokale CSV-Datei aktualisiert."
+    )
+
+example_repo = st.session_state.get("github_repo") or github_defaults["repo"] or "liamw8lde/Winter-2024_2025-Training-PLan"
+example_branch = st.session_state.get("github_branch") or github_defaults["branch"] or "main"
+example_path = st.session_state.get("github_path") or github_defaults["path"] or CSV_FILE
+example_committer = st.session_state.get("github_committer_name") or github_defaults["committer_name"] or "Winterplan Bot"
+example_email = (
+    st.session_state.get("github_committer_email")
+    or github_defaults["committer_email"]
+    or "liamw8lde@gmail.com.com"
+)
+
+with st.expander("📄 Beispiel für .streamlit/secrets.toml"):
+    st.code(
+        """
+GITHUB_TOKEN = "XXXXX"
+GITHUB_REPO = "{repo}"
+GITHUB_BRANCH = "{branch}"
+GITHUB_PATH = "{path}"
+GITHUB_COMMITTER_NAME = "{committer}"
+GITHUB_COMMITTER_EMAIL = "{email}"
+        """.format(
+            repo=example_repo,
+            branch=example_branch,
+            path=example_path,
+            committer=example_committer,
+            email=example_email,
+        ),
+        language="toml",
     )
 
 st.subheader("Zusammenfassung")
@@ -376,17 +522,28 @@ if st.button("✅ Bestätigen und Speichern"):
 
     repo_name = (st.session_state.get("github_repo") or "").strip()
     branch_name = (st.session_state.get("github_branch") or "main").strip() or "main"
-    token_value = (st.session_state.get("github_token") or "").strip()
+    repo_path = (st.session_state.get("github_path") or CSV_FILE).strip() or CSV_FILE
+    committer_name = (st.session_state.get("github_committer_name") or "").strip()
+    committer_email = (st.session_state.get("github_committer_email") or "").strip()
+    token_manual = (st.session_state.get("github_token_manual") or "").strip()
+    token_secret = (st.session_state.get("github_token_secret") or "").strip()
+    token_value = token_manual or token_secret
+
+    committer_payload = None
+    if committer_name and committer_email:
+        committer_payload = {"name": committer_name, "email": committer_email}
 
     if repo_name and token_value:
         csv_payload = df_all.to_csv(index=False).encode("utf-8")
         success, api_steps = update_github_file_via_api(
             token_value,
             repo_name,
-            CSV_FILE,
+            repo_path,
             csv_payload,
             default_commit_message,
             branch=branch_name,
+            committer=committer_payload,
+            author=committer_payload,
         )
         for step in api_steps:
             st.write(step)
