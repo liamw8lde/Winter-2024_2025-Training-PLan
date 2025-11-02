@@ -38,3 +38,6 @@ Thumbs.db
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Helper scripts generated at runtime
+git_askpass.sh
