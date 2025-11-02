@@ -101,6 +101,9 @@ def load_ranks_csv(file_path):
 
 def postprocess_plan(df):
     """Process plan DataFrame and add computed columns"""
+    # Make a copy to avoid SettingWithCopyWarning
+    df = df.copy()
+
     required = ["Datum", "Tag", "Slot", "Typ", "Spieler"]
     for c in required:
         df[c] = df[c].astype(str).str.strip()
@@ -935,15 +938,16 @@ with tab_auto:
                         st.error(f"Fehler beim Speichern: {e}")
 
             with col_download:
-                df_to_save = st.session_state.df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]]
-                csv_bytes = df_to_save.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    "📥 CSV herunterladen",
-                    data=csv_bytes,
-                    file_name="Winterplan_2026_autopopulated.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+                if "df_result" in st.session_state:
+                    df_to_save = st.session_state.df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]]
+                    csv_bytes = df_to_save.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        "📥 CSV herunterladen",
+                        data=csv_bytes,
+                        file_name="Winterplan_2026_autopopulated.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
 
             with col_discard:
                 if st.button("🗑️ Vorschau verwerfen", use_container_width=True):
