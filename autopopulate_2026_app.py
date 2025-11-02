@@ -581,6 +581,63 @@ else:
 if "df_work" not in st.session_state:
     st.session_state.df_work = df_plan.copy()
 
+# ==================== ERROR CHECKING FUNCTION ====================
+def check_plan_violations(df_plan, available_days, preferences, holidays):
+    """Check all slots in the plan for rule violations"""
+    if df_plan.empty or len(df_plan) == 0:
+        return []
+
+    violations_list = []
+
+    for idx, row in df_plan.iterrows():
+        datum_dt = row.get("Datum_dt")
+        if pd.isna(datum_dt):
+            continue
+
+        datum = datum_dt.date()
+        tag = row.get("Tag", "")
+        slot = row.get("Slot", "")
+        typ = row.get("Typ", "")
+        spieler = row.get("Spieler", "")
+        s_time = row.get("S_Time", "00:00")
+
+        # Parse players
+        players = [p.strip() for p in str(spieler).split(",") if p.strip()]
+
+        # Check each player
+        for player in players:
+            viols = check_violations(
+                player, tag, s_time, typ, df_plan, datum,
+                available_days, preferences, holidays
+            )
+
+            if viols:
+                for viol in viols:
+                    violations_list.append({
+                        "Datum": datum,
+                        "Tag": tag,
+                        "Slot": slot,
+                        "Typ": typ,
+                        "Spieler": player,
+                        "Violation": viol
+                    })
+
+        # Check singles rank rule
+        if typ.lower().startswith("einzel") and len(players) == 2:
+            r1 = RANK.get(players[0], 999)
+            r2 = RANK.get(players[1], 999)
+            if r1 != 999 and r2 != 999 and abs(r1 - r2) > 2:
+                violations_list.append({
+                    "Datum": datum,
+                    "Tag": tag,
+                    "Slot": slot,
+                    "Typ": typ,
+                    "Spieler": f"{players[0]} vs {players[1]}",
+                    "Violation": f"Rang-Differenz zu groß: |{r1} - {r2}| = {abs(r1 - r2)} > 2"
+                })
+
+    return violations_list
+
 # ==================== SPREADSHEET VIEW FUNCTION ====================
 def create_player_calendar_view(df_plan):
     """Create a pivot table with dates as rows and players as columns"""
@@ -635,15 +692,19 @@ with col4:
     total_possible = len(generate_allowed_slots_calendar_2026())
     st.metric("Gesamt möglich", total_possible)
 
-# Clear plan button
+# Action buttons
 if len(st.session_state.df_work) > 0:
-    col_clear, col_spacer = st.columns([1, 3])
+    col_clear, col_check, col_spacer = st.columns([1, 1, 2])
     with col_clear:
         if st.button("🗑️ Plan leeren", use_container_width=True, type="secondary"):
             # Store confirmation state
             st.session_state.show_clear_confirm = True
 
-    # Confirmation dialog
+    with col_check:
+        if st.button("⚠️ Regeln prüfen", use_container_width=True, type="secondary"):
+            st.session_state.run_error_check = True
+
+    # Confirmation dialog for clear
     if st.session_state.get("show_clear_confirm", False):
         st.warning("⚠️ **Warnung:** Dies löscht alle {0} Slots aus dem aktuellen Plan!".format(len(st.session_state.df_work)))
         col_yes, col_no, col_space = st.columns([1, 1, 2])
@@ -659,6 +720,51 @@ if len(st.session_state.df_work) > 0:
             if st.button("❌ Abbrechen", use_container_width=True):
                 st.session_state.show_clear_confirm = False
                 st.rerun()
+
+# Error checking results
+if st.session_state.get("run_error_check", False):
+    with st.spinner("Prüfe Regeln..."):
+        violations = check_plan_violations(
+            st.session_state.df_work,
+            available_days,
+            preferences,
+            holidays
+        )
+
+    if not violations:
+        st.success("✅ Keine Regelverstöße gefunden! Der Plan ist vollständig regelkonform.")
+    else:
+        st.error(f"⚠️ **{len(violations)} Regelverstöße gefunden!**")
+
+        # Group by type of violation
+        df_violations = pd.DataFrame(violations)
+
+        with st.expander(f"📋 Details zu allen {len(violations)} Verstößen", expanded=True):
+            # Show as table
+            display_df = df_violations.copy()
+            display_df["Datum"] = display_df["Datum"].astype(str)
+            st.dataframe(
+                display_df[["Datum", "Tag", "Slot", "Spieler", "Violation"]],
+                use_container_width=True,
+                height=400
+            )
+
+        # Summary by violation type
+        with st.expander("📊 Zusammenfassung nach Verstoßtyp"):
+            violation_counts = df_violations["Violation"].value_counts().reset_index()
+            violation_counts.columns = ["Verstoß", "Anzahl"]
+            st.dataframe(violation_counts, use_container_width=True)
+
+        # Summary by player
+        with st.expander("👥 Zusammenfassung nach Spieler"):
+            player_counts = df_violations["Spieler"].value_counts().reset_index()
+            player_counts.columns = ["Spieler", "Anzahl Verstöße"]
+            st.dataframe(player_counts, use_container_width=True)
+
+    # Close button
+    if st.button("❌ Prüfung schließen", use_container_width=False):
+        st.session_state.run_error_check = False
+        st.rerun()
 
 st.markdown("---")
 
