@@ -1,9 +1,10 @@
 
 import os
-import subprocess
+import base64
 from pathlib import Path
 
 import pandas as pd
+import requests
 import streamlit as st
 from datetime import datetime, date
 
@@ -43,105 +44,75 @@ def save_data(df):
     df.to_csv(CSV_PATH, index=False)
 
 
-def run_git_command(command, env=None):
-    """Execute a git command within the repository directory."""
+def get_github_defaults():
+    repo = os.getenv("GITHUB_REPOSITORY") or os.getenv("GITHUB_REPO") or ""
+    branch = os.getenv("GITHUB_BRANCH") or os.getenv("GIT_BRANCH") or "main"
+    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or ""
+    return repo, branch, token
+
+
+def build_github_headers(token):
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def update_github_file_via_api(token, repo, path, content_bytes, message, branch="main"):
+    """Create or update a file in the GitHub repository using the REST API."""
+    headers = build_github_headers(token)
+    base_url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    params = {"ref": branch} if branch else {}
+    steps = []
+
     try:
-        result = subprocess.run(
-            command,
-            cwd=REPO_DIR,
-            capture_output=True,
-            text=True,
-            check=True,
-            env=None if env is None else {**os.environ, **env},
-        )
-        return True, result.stdout.strip()
-    except subprocess.CalledProcessError as exc:
-        output = exc.stderr.strip() or exc.stdout.strip() or str(exc)
-        return False, output
-    except FileNotFoundError as exc:
-        return False, str(exc)
+        get_resp = requests.get(base_url, headers=headers, params=params, timeout=10)
+    except requests.RequestException as exc:
+        return False, [f"GET {base_url} fehlgeschlagen: {exc}"]
 
+    sha = None
+    if get_resp.status_code == 200:
+        try:
+            sha = get_resp.json().get("sha")
+        except ValueError:
+            return False, [f"Ungültige Antwort beim Lesen der bestehenden Datei: {get_resp.text}"]
+        steps.append(f"✅ Aktuelle Datei gefunden (SHA {sha[:7] if sha else 'unbekannt'})")
+    elif get_resp.status_code == 404:
+        steps.append("ℹ️ Datei existiert noch nicht – sie wird neu erstellt.")
+    else:
+        error_message = get_resp.text
+        try:
+            error_message = get_resp.json().get("message", error_message)
+        except ValueError:
+            pass
+        return False, [f"GET {base_url} -> {get_resp.status_code}: {error_message}"]
 
-def has_csv_changes():
-    success, output = run_git_command(["git", "status", "--porcelain", CSV_FILE])
-    if not success:
-        return None, output
-    has_changes = any(line.strip() for line in output.splitlines())
-    return has_changes, output
+    payload = {
+        "message": message,
+        "content": base64.b64encode(content_bytes).decode("utf-8"),
+    }
+    if branch:
+        payload["branch"] = branch
+    if sha:
+        payload["sha"] = sha
 
+    try:
+        put_resp = requests.put(base_url, headers=headers, json=payload, timeout=10)
+    except requests.RequestException as exc:
+        return False, steps + [f"PUT {base_url} fehlgeschlagen: {exc}"]
 
-def commit_csv_changes(commit_message, env=None):
-    """Stage the CSV file and create a commit."""
-    outputs = []
+    if put_resp.status_code in (200, 201):
+        steps.append(f"✅ Datei erfolgreich über die GitHub API aktualisiert ({put_resp.status_code}).")
+        return True, steps
 
-    success, message = run_git_command(["git", "add", CSV_FILE])
-    outputs.append((success, message))
-    if not success:
-        return False, outputs
-
-    success, message = run_git_command(["git", "commit", "-m", commit_message], env=env)
-    outputs.append((success, message))
-    return success, outputs
-
-
-def get_current_branch():
-    success, output = run_git_command(["git", "rev-parse", "--abbrev-ref", "HEAD"])
-    if success:
-        return output.strip()
-    return None
-
-
-def get_git_identity():
-    """Return configured git user name and email (empty strings if unset)."""
-    name_success, name_out = run_git_command(["git", "config", "user.name"])
-    email_success, email_out = run_git_command(["git", "config", "user.email"])
-
-    name = name_out.strip() if name_success and name_out else ""
-    email = email_out.strip() if email_success and email_out else ""
-    return name, email
-
-
-def set_git_identity(name, email):
-    """Configure git user name and email locally for the repository."""
-    outputs = []
-
-    success, message = run_git_command(["git", "config", "user.name", name])
-    outputs.append((success, message))
-    if not success:
-        return False, outputs
-
-    success, message = run_git_command(["git", "config", "user.email", email])
-    outputs.append((success, message))
-    return success, outputs
-
-
-def ensure_git_askpass_script():
-    script_path = REPO_DIR / "git_askpass.sh"
-    script_path.write_text("#!/bin/sh\nprintf '%s' \"$GITHUB_TOKEN\"\n", encoding="utf-8")
-    script_path.chmod(0o700)
-    return script_path
-
-
-def push_csv_changes(remote="origin", branch=None):
-    outputs = []
-    if branch is None:
-        branch = get_current_branch()
-    if not branch:
-        outputs.append((False, "Aktueller Git-Branch konnte nicht ermittelt werden."))
-        return False, outputs
-
-    push_env = {"GIT_TERMINAL_PROMPT": "0"}
-    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN")
-    if token:
-        script_path = ensure_git_askpass_script()
-        push_env.update({
-            "GIT_ASKPASS": str(script_path),
-            "GITHUB_TOKEN": token,
-        })
-
-    success, message = run_git_command(["git", "push", remote, branch], env=push_env)
-    outputs.append((success, message))
-    return success, outputs
+    error_message = put_resp.text
+    try:
+        error_message = put_resp.json().get("message", error_message)
+    except ValueError:
+        pass
+    steps.append(f"❌ PUT {base_url} -> {put_resp.status_code}: {error_message}")
+    return False, steps
 
 def parse_blocked_ranges_from_csv(blocked_ranges_str):
     """Parse BlockedRanges from CSV format: '2026-01-03→2026-01-10;2026-02-15→2026-02-20'"""
@@ -337,40 +308,35 @@ pref = st.radio(
 
 notes = st.text_area("Zusätzliche Hinweise", value=prev.get("Notes",""))
 
-st.subheader("Git-Status")
-st.caption("🔐 Beim Speichern wird automatisch ein Git-Commit erstellt und zu GitHub gepusht.")
-is_git_repo = (REPO_DIR / ".git").exists()
+st.subheader("GitHub-Synchronisierung")
+st.caption("🔐 Beim Speichern wird die CSV-Datei automatisch über die GitHub API aktualisiert.")
 
-if not is_git_repo:
+default_repo, default_branch, default_token = get_github_defaults()
+
+st.session_state.setdefault("github_repo", default_repo)
+st.session_state.setdefault("github_branch", default_branch)
+st.session_state.setdefault("github_token", default_token)
+
+st.text_input(
+    "GitHub-Repository (owner/name)",
+    key="github_repo",
+    help="Beispiel: deinbenutzername/dein-repo",
+)
+st.text_input(
+    "Branch",
+    key="github_branch",
+    help="Ziel-Branch im Repository (Standard: main)",
+)
+st.text_input(
+    "Personal Access Token",
+    key="github_token",
+    type="password",
+    help="Token mit 'repo'-Berechtigung, um die Datei schreiben zu dürfen.",
+)
+
+if not st.session_state.get("github_repo") or not st.session_state.get("github_token"):
     st.info(
-        "Es wurde kein Git-Repository gefunden. Die Daten werden nur lokal gespeichert."
-    )
-else:
-    current_name, current_email = get_git_identity()
-
-    if "git_user_name" not in st.session_state:
-        st.session_state["git_user_name"] = current_name or ""
-    if "git_user_email" not in st.session_state:
-        st.session_state["git_user_email"] = current_email or ""
-
-    if current_name and current_email:
-        st.success(f"Git-Identität erkannt: {current_name} <{current_email}>")
-    else:
-        st.warning(
-            "Git-Benutzername oder E-Mail fehlen. Bitte unten ausfüllen, damit Commits funktionieren."
-        )
-
-    st.text_input(
-        "Git-Benutzername",
-        value=st.session_state.get("git_user_name", ""),
-        key="git_user_name",
-        help="Name, der in Git-Commits erscheinen soll."
-    )
-    st.text_input(
-        "Git-E-Mail",
-        value=st.session_state.get("git_user_email", ""),
-        key="git_user_email",
-        help="E-Mail-Adresse für Git-Commits.",
+        "Bitte Repository und Token angeben. Ohne diese Angaben wird nur die lokale CSV-Datei aktualisiert."
     )
 
 st.subheader("Zusammenfassung")
@@ -408,72 +374,25 @@ if st.button("✅ Bestätigen und Speichern"):
     st.success("Gespeichert!")
     st.dataframe(df_all[df_all["Spieler"]==sel_player])
 
-    if is_git_repo:
-        change_state, status_output = has_csv_changes()
-        if change_state is None:
-            st.error("Git-Status konnte nicht geprüft werden.")
-            if status_output:
-                st.code(status_output)
-        elif change_state:
-            identity_outputs = []
-            resolved_name, resolved_email = get_git_identity()
-            identity_success = bool(resolved_name and resolved_email)
+    repo_name = (st.session_state.get("github_repo") or "").strip()
+    branch_name = (st.session_state.get("github_branch") or "main").strip() or "main"
+    token_value = (st.session_state.get("github_token") or "").strip()
 
-            provided_name = st.session_state.get("git_user_name", "").strip()
-            provided_email = st.session_state.get("git_user_email", "").strip()
-
-            if not identity_success and provided_name and provided_email:
-                identity_success, identity_outputs = set_git_identity(provided_name, provided_email)
-                if identity_success:
-                    resolved_name, resolved_email = provided_name, provided_email
-                    st.session_state["git_user_name"] = provided_name
-                    st.session_state["git_user_email"] = provided_email
-            elif not identity_success:
-                st.error("Bitte Git-Benutzername und E-Mail angeben, um Commits zu erstellen.")
-
-            for idx, (step_success, message) in enumerate(identity_outputs, start=1):
-                status = "✅" if step_success else "❌"
-                if message:
-                    st.write(f"{status} Git-Konfiguration:")
-                    st.code(message)
-                else:
-                    st.write(f"{status} Git-Konfigurationsschritt {idx} ausgeführt.")
-
-            if not identity_success:
-                st.info("CSV gespeichert, aber Git-Commit wurde übersprungen.")
-            else:
-                commit_env = {
-                    "GIT_AUTHOR_NAME": resolved_name,
-                    "GIT_AUTHOR_EMAIL": resolved_email,
-                    "GIT_COMMITTER_NAME": resolved_name,
-                    "GIT_COMMITTER_EMAIL": resolved_email,
-                }
-
-                commit_success, commit_outputs = commit_csv_changes(default_commit_message, env=commit_env)
-                for idx, (step_success, message) in enumerate(commit_outputs, start=1):
-                    status = "✅" if step_success else "❌"
-                    if message:
-                        st.write(f"{status} Git-Ausgabe:")
-                        st.code(message)
-                    else:
-                        st.write(f"{status} Befehl {idx} ausgeführt.")
-
-                if commit_success:
-                    push_success, push_outputs = push_csv_changes()
-                    for push_success_single, message in push_outputs:
-                        status = "✅" if push_success_single else "❌"
-                        if message:
-                            st.write(f"{status} Git Push:")
-                            st.code(message)
-                        else:
-                            st.write(f"{status} Push ausgeführt.")
-                    if push_success:
-                        st.success("Änderungen wurden committet und zu GitHub gepusht.")
-                    else:
-                        st.error("Commit erstellt, aber Push nach GitHub ist fehlgeschlagen.")
-                else:
-                    st.error("Git-Commit fehlgeschlagen. Siehe Ausgaben oben für Details.")
+    if repo_name and token_value:
+        csv_payload = df_all.to_csv(index=False).encode("utf-8")
+        success, api_steps = update_github_file_via_api(
+            token_value,
+            repo_name,
+            CSV_FILE,
+            csv_payload,
+            default_commit_message,
+            branch=branch_name,
+        )
+        for step in api_steps:
+            st.write(step)
+        if success:
+            st.success("Änderungen wurden über die GitHub API gespeichert.")
         else:
-            st.info("Keine Änderungen für Git erkannt.")
+            st.error("GitHub API-Aktualisierung fehlgeschlagen. Details siehe oben.")
     else:
-        st.info("CSV gespeichert. Kein Git-Commit ausgeführt, da kein Repository erkannt wurde.")
+        st.info("CSV gespeichert. GitHub wurde nicht aktualisiert, da Repository oder Token fehlen.")
