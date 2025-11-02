@@ -254,3 +254,15 @@ if st.button("✅ Bestätigen und Speichern"):
     save_data(df_all)
     st.success("Gespeichert!")
     st.dataframe(df_all[df_all["Spieler"]==sel_player])
+
+# Download button for updated CSV (useful for Streamlit Cloud deployments)
+st.divider()
+st.caption("📥 CSV herunterladen um in GitHub zu aktualisieren")
+csv_data = df_all.to_csv(index=False)
+st.download_button(
+    label="⬇️ Spieler_Preferences_2026.csv herunterladen",
+    data=csv_data,
+    file_name="Spieler_Preferences_2026.csv",
+    mime="text/csv",
+    help="Lade die aktuelle CSV-Datei herunter und ersetze die Datei in deinem GitHub Repository"
+)
