@@ -1,0 +1,316 @@
+
+# 📋 SANITY CHECK – Winter Training (Iterative Audit + Repair)
+
+## ROLE
+You are my auditor and repairer. Run a FULL audit, repair all resolvable violations, and RE-AUDIT, repair, fix different player pairing repeatedly until the plan is stable (no new violations). Repeat up to 100 passes if necessary.
+
+---
+
+## INPUT
+- **INPUT FILE**: One Excel/CSV file (the plan) with columns: `Datum`, `Tag`, `Slot`, `Typ`, `Spieler`.
+- Use ONLY this file + the rules below. No external data.
+- **FROZEN WEEKS** (optional): I may provide ISO weeks to freeze (e.g., `{year:2025, weeks:[38]}`). Do NOT modify matches in frozen weeks; still AUDIT and report violations.
+
+---
+
+## STABILITY & PRIORITY
+- After every repair pass, re-run the FULL audit.
+- **HARD rules** must be satisfied before any SOFT advisories.
+- If a conflict cannot be solved without breaking a HARD rule:
+  - Mark the row in memory and attempt to fix it in the next pass.
+  - Do NOT mark rows as "UNREPAIRABLE" during the first audit loop. Instead, re-audit and attempt iterative repairs until no further progress can be made or the maximum number of passes (100) is reached.
+  - Only after exhausting all possible solutions, mark rows as "UNREPAIRABLE" and flag them for further review.
+
+---
+
+## PARSING
+1. Prefer the sheet named **“Spielplan”**.
+2. Slot code must match:
+^([DE])(\d{2}):(\d{2})-([0-9]+)\s+PL([AB])$
+
+
+3. **Headcount expectations**:
+- Einzel = 2 players
+- Doppel = 4 players
+4. Compute ISO week (Year + Week) from `Datum` for weekly rules/coverage.
+5. Normalize player names:
+- Trim spaces, collapse multiple spaces, handle special characters (e.g., ß ↔ ss, umlauts), and normalize case.
+
+---
+
+## ALLOWED SLOTS (STRICT)
+- **Monday (Montag)**:
+  - `D20:00-120 PLA` — Doppel
+  - `D20:00-120 PLB` — Doppel
+- **Wednesday (Mittwoch)**:
+  - `E18:00-60 PLA` — Einzel (PLB at 18:00 is illegal)
+  - `E19:00-60 PLA` — Einzel
+  - `E19:00-60 PLB` — Einzel
+  - `D20:00-90 PLA` — Doppel
+  - `D20:00-90 PLB` — Doppel
+- **Thursday (Donnerstag)**:
+  - `E20:00-90 PLA` — Einzel
+  - `E20:00-90 PLB` — Einzel
+
+---
+
+## WEEKLY COVERAGE (STRICT)
+- For EACH ISO week, every allowed weekday/slot combination above must appear EXACTLY ONCE.
+- Missing or duplicate required slots = **violation**.
+
+---
+
+## GLOBAL TIME RULES (HARD)
+- No starts after **20:00**.
+- Wednesday doubles must be exactly **20:00** for **90 minutes**.
+- Duration/court must match the slot code exactly.
+
+---
+
+## PROTECTED PLAYERS (HARD)
+- **Patrick Buehrsch** → 18:00 only.
+- **Frank Petermann** → only 19:00 or 20:00 (never 18:00).
+- **Matthias Duddek** → only 18:00 or 19:00 (never ≥20:00).
+- **Dirk Kistner** → Mo/Mi/Do only; on Wednesday only 19:00; max 2/week.
+- **Arndt Stueber** → only Wednesday 19:00.
+- **Jens Hafner** → only Wednesday 19:00.
+- **Thomas/Thommy Grueneberg** → start 18:00 or 19:00 70% of the time; 30% Wednesday 20:00.
+
+---
+
+## WOMEN & SINGLES (HARD)
+- Women (Anke Ihde, Lena Meiss, Martina Schmidt, Kerstin Baarck) must NOT play singles (no mixed singles).
+
+---
+
+## MONDAY CORE SLOT (HARD) — Montag D20:00–120 PLA
+1. **Mandatory Core**:
+- Martin Lange and Bjoern Junker must always be present unless on holiday.
+- The other two players must be chosen ONLY from **{Frank Petermann, Lars Staubermann, Peter Plaehn}**, rotated evenly across the season.
+2. **Exclusions**:
+- No women ever (exception: Lena Meiss allowed ONLY if Liam Wilde is also one of the four).
+- Mohamad Albadry is NEVER allowed.
+- No other substitutes allowed.
+3. **Holiday Exception**:
+- If >1 core player is missing and not on holiday → **violation** `mon_pla_core` (do NOT mark as UNREPAIRABLE during the first loop).
+4. **Enforcement Order**:
+- Enforce this rule BEFORE any other repairs for that row.
+
+---
+
+## PLAYER USAGE (HARD)
+- **One-per-day**: A player may not appear more than once per calendar date.
+- **Weekly caps**:
+  - Tobias Kahl: max 1/week
+  - Dirk Kistner: max 2/week
+  - Torsten Bartel: max 1/week
+- **Season caps**:
+  - Torsten Bartel: max 5/season
+  - Frank Petermann: max 12/season (Monday PLA counts).
+
+---
+
+## HOLIDAYS / BLACKOUTS (AUTHORITATIVE)
+- Use ONLY the list provided in the rules. Prompt data overrides on overlap.
+- **Monday PLA core exemption**: In that slot ONLY, the core four are exempt from holiday checks (caps still apply).
+- **Global blackouts**: NO matches on 24.12, 25.12, 31.12 (any year in plan).
+
+---
+
+## RANK RULES
+- **Singles Rank Window (HARD)**:
+  - For players A, B in singles: `|rank[A] − rank[B]| ≤ 2` → else violation `singles_rank_window`.
+- **Doubles Balance (SOFT/advisory)**:
+  - With sorted ranks `r1 ≤ r2 ≤ r3 ≤ r4`, flag `doubles_unbalanced_advisory` if neither:
+ - (a) Similar quartet: `r4 − r1 ≤ 2`, nor
+ - (b) Two-strong vs two-weak: `(r2 − r1 ≤ 1) AND (r4 − r3 ≤ 1) AND (r3 − r2 ≥ 2)`.
+
+---
+
+## REPAIR ENGINE
+
+### GENERAL PRINCIPLES
+- Never edit rows in FROZEN WEEKS.
+- Prefer swaps/minimal movement within the SAME ISO week.
+- Do not delete rows. If unsolvable without breaking a HARD rule:
+  - Do NOT mark as "UNREPAIRABLE" during the first loop. Re-audit and attempt iterative repairs.
+  - Only after exhausting all solutions, append “(UNREPAIRABLE)” to `Spieler` and keep the row.
+- Maintain headcount and slot legality at all times.
+
+### REPAIR PRIORITY ORDER
+1. Illegal slot codes / wrong weekday-duration-court → fix to nearest legal slot or re-audit.
+2. Headcount wrong (Einzel≠2, Doppel≠4) → adjust by adding/removing legal players.
+3. Monday core slot violations → enforce core roster/exclusions strictly.
+4. Holidays/blackouts (except Monday core exemption) → replace with legal, available players.
+5. Protected player time rules → move/replace to legal times.
+6. One-per-day conflicts → de-duplicate by swapping with legal alternates.
+7. Weekly coverage (missing/duplicate required slots) → fix within week where possible.
+8. Weekly & season caps → re-balance without breaking earlier HARD rules.
+9. Singles rank window (HARD) → re-pair; if impossible, re-audit.
+10. Doubles balance (SOFT) → improve without breaking HARD rules.
+
+---
+
+## ITERATION
+- Perform: **AUDIT → REPAIR → AUDIT** … until:
+  - No violations remain (other than SOFT advisories), OR
+  - Only rows marked "UNREPAIRABLE" remain, OR
+  - Max 100 passes reached.
+
+---
+
+## OUTPUT (after convergence)
+1. **Sanity Summary (JSON)**:
+- Include counts of all violations.
+2. **Violations Table (CSV)**:
+- Include rows flagged as "UNREPAIRABLE" with explanations.
+3. **Per-player Weekly Usage (CSV)**:
+- Include weekly and season cap checks.
+4. **Corrected Plan (CSV)**:
+- Same layout as input file.
+- Append “(UNREPAIRABLE)” to unresolved rows.
+
+---
+
+This updated version ensures clarity and emphasizes iterative re-auditing before marking rows as "UNREPAIRABLE." Let me know if further adjustments are needed!3. **Headcount expectations**:
+- Einzel = 2 players
+- Doppel = 4 players
+4. Compute ISO week (Year + Week) from `Datum` for weekly rules/coverage.
+5. Normalize player names:
+- Trim spaces, collapse multiple spaces, handle special characters (e.g., ß ↔ ss, umlauts), and normalize case.
+
+---
+
+## ALLOWED SLOTS (STRICT)
+- **Monday (Montag)**:
+  - `D20:00-120 PLA` — Doppel
+  - `D20:00-120 PLB` — Doppel
+- **Wednesday (Mittwoch)**:
+  - `E18:00-60 PLA` — Einzel (PLB at 18:00 is illegal)
+  - `E19:00-60 PLA` — Einzel
+  - `E19:00-60 PLB` — Einzel
+  - `D20:00-90 PLA` — Doppel
+  - `D20:00-90 PLB` — Doppel
+- **Thursday (Donnerstag)**:
+  - `E20:00-90 PLA` — Einzel
+  - `E20:00-90 PLB` — Einzel
+
+---
+
+## WEEKLY COVERAGE (STRICT)
+- For EACH ISO week, every allowed weekday/slot combination above must appear EXACTLY ONCE.
+- Missing or duplicate required slots = **violation**.
+
+---
+
+## GLOBAL TIME RULES (HARD)
+- No starts after **20:00**.
+- Wednesday doubles must be exactly **20:00** for **90 minutes**.
+- Duration/court must match the slot code exactly.
+
+---
+
+## PROTECTED PLAYERS (HARD)
+- **Patrick Buehrsch** → 18:00 only.
+- **Frank Petermann** → only 19:00 or 20:00 (never 18:00).
+- **Matthias Duddek** → only 18:00 or 19:00 (never ≥20:00).
+- **Dirk Kistner** → Mo/Mi/Do only; on Wednesday only 19:00; max 2/week.
+- **Arndt Stueber** → only Wednesday 19:00.
+- **Jens Hafner** → only Wednesday 19:00.
+- **Thomas/Thommy Grueneberg** → start 18:00 or 19:00 70% of the time; 30% Wednesday 20:00.
+
+---
+
+## WOMEN & SINGLES (HARD)
+- Women (Anke Ihde, Lena Meiss, Martina Schmidt, Kerstin Baarck) must NOT play singles (no mixed singles).
+
+---
+
+## MONDAY CORE SLOT (HARD) — Montag D20:00–120 PLA
+1. **Mandatory Core**:
+- Martin Lange and Bjoern Junker must always be present unless on holiday.
+- The other two players must be chosen ONLY from **{Frank Petermann, Lars Staubermann, Peter Plaehn}**, rotated evenly across the season.
+2. **Exclusions**:
+- No women ever (exception: Lena Meiss allowed ONLY if Liam Wilde is also one of the four).
+- Mohamad Albadry is NEVER allowed.
+- No other substitutes allowed.
+3. **Holiday Exception**:
+- If >1 core player is missing and not on holiday → **violation** `mon_pla_core` (do NOT mark as UNREPAIRABLE during the first loop).
+4. **Enforcement Order**:
+- Enforce this rule BEFORE any other repairs for that row.
+
+---
+
+## PLAYER USAGE (HARD)
+- **One-per-day**: A player may not appear more than once per calendar date.
+- **Weekly caps**:
+  - Tobias Kahl: max 1/week
+  - Dirk Kistner: max 2/week
+  - Torsten Bartel: max 1/week
+- **Season caps**:
+  - Torsten Bartel: max 5/season
+  - Frank Petermann: max 12/season (Monday PLA counts).
+
+---
+
+## HOLIDAYS / BLACKOUTS (AUTHORITATIVE)
+- Use ONLY the list provided in the rules. Prompt data overrides on overlap.
+- **Monday PLA core exemption**: In that slot ONLY, the core four are exempt from holiday checks (caps still apply).
+- **Global blackouts**: NO matches on 24.12, 25.12, 31.12 (any year in plan).
+
+---
+
+## RANK RULES
+- **Singles Rank Window (HARD)**:
+  - For players A, B in singles: `|rank[A] − rank[B]| ≤ 2` → else violation `singles_rank_window`.
+- **Doubles Balance (SOFT/advisory)**:
+  - With sorted ranks `r1 ≤ r2 ≤ r3 ≤ r4`, flag `doubles_unbalanced_advisory` if neither:
+ - (a) Similar quartet: `r4 − r1 ≤ 2`, nor
+ - (b) Two-strong vs two-weak: `(r2 − r1 ≤ 1) AND (r4 − r3 ≤ 1) AND (r3 − r2 ≥ 2)`.
+
+---
+
+## REPAIR ENGINE
+
+### GENERAL PRINCIPLES
+- Never edit rows in FROZEN WEEKS.
+- Prefer swaps/minimal movement within the SAME ISO week.
+- Do not delete rows. If unsolvable without breaking a HARD rule:
+  - Do NOT mark as "UNREPAIRABLE" during the first loop. Re-audit and attempt iterative repairs.
+  - Only after exhausting all solutions, append “(UNREPAIRABLE)” to `Spieler` and keep the row.
+- Maintain headcount and slot legality at all times.
+
+### REPAIR PRIORITY ORDER
+1. Illegal slot codes / wrong weekday-duration-court → fix to nearest legal slot or re-audit.
+2. Headcount wrong (Einzel≠2, Doppel≠4) → adjust by adding/removing legal players.
+3. Monday core slot violations → enforce core roster/exclusions strictly.
+4. Holidays/blackouts (except Monday core exemption) → replace with legal, available players.
+5. Protected player time rules → move/replace to legal times.
+6. One-per-day conflicts → de-duplicate by swapping with legal alternates.
+7. Weekly coverage (missing/duplicate required slots) → fix within week where possible.
+8. Weekly & season caps → re-balance without breaking earlier HARD rules.
+9. Singles rank window (HARD) → re-pair; if impossible, re-audit.
+10. Doubles balance (SOFT) → improve without breaking HARD rules.
+
+---
+
+## ITERATION
+- Perform: **AUDIT → REPAIR → AUDIT** … until:
+  - No violations remain (other than SOFT advisories), OR
+  - Only rows marked "UNREPAIRABLE" remain, OR
+  - Max 100 passes reached.
+
+---
+
+## OUTPUT (after convergence)
+1. **Sanity Summary (JSON)**:
+- Include counts of all violations.
+2. **Violations Table (CSV)**:
+- Include rows flagged as "UNREPAIRABLE" with explanations.
+3. **Per-player Weekly Usage (CSV)**:
+- Include weekly and season cap checks.
+4. **Corrected Plan (CSV)**:
+- Same layout as input file.
+- clean data
+
+---
