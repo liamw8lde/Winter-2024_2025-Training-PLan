@@ -367,6 +367,60 @@ def find_empty_slots(df_plan):
     return empty
 
 # ==================== AUTOPOPULATION ALGORITHM ====================
+def check_doubles_balance(players_with_ranks):
+    """
+    Check if 4 players satisfy HARD doubles balance constraints.
+
+    Args:
+        players_with_ranks: List of (name, rank) tuples for 4 players
+
+    Returns:
+        (is_valid, reason) tuple - is_valid is True if constraints satisfied
+
+    HARD Constraints:
+    - Strongest player (r1) must be rank ≤ 3
+    - Rank spread (r4 - r1) must be ≤ 3
+    - Must satisfy balanced pairing patterns
+    """
+    if len(players_with_ranks) != 4:
+        return False, "Need exactly 4 players"
+
+    # Extract ranks and sort
+    ranks = [r for (name, r) in players_with_ranks]
+
+    # Check for unknown ranks
+    if any(r == 999 for r in ranks):
+        return False, "Unknown ranks present"
+
+    # Sort ranks: r1 ≤ r2 ≤ r3 ≤ r4
+    sorted_ranks = sorted(ranks)
+    r1, r2, r3, r4 = sorted_ranks
+
+    # HARD: Strongest player must be rank ≤ 3
+    if r1 > 3:
+        return False, f"Strongest player rank {r1} > 3 (must be 1, 2, or 3)"
+
+    # HARD: Max rank spread is 3
+    spread = r4 - r1
+    if spread > 3:
+        return False, f"Rank spread {spread} > 3 (range {r1}-{r4})"
+
+    # HARD: Check balanced pairing patterns
+    # Pattern (i): Similar quartet - all within 2 ranks
+    similar_quartet = (r4 - r1) <= 2
+
+    # Pattern (ii): Two-strong vs two-weak
+    two_vs_two = (
+        (r2 - r1) <= 1 and  # Top pair close together
+        (r4 - r3) <= 1 and  # Bottom pair close together
+        (r3 - r2) >= 2      # Gap between pairs
+    )
+
+    if not (similar_quartet or two_vs_two):
+        return False, f"Unbalanced pairing: ranks {sorted_ranks} don't match required patterns"
+
+    return True, "OK"
+
 def select_singles_pair(candidates):
     """Select 2 players for singles with rank difference ≤ 2"""
     for i, c1 in enumerate(candidates):
@@ -382,10 +436,32 @@ def select_singles_pair(candidates):
     return None
 
 def select_doubles_team(candidates, num_players=4):
-    """Select 4 players for doubles"""
+    """
+    Select 4 players for doubles match with HARD rank balance constraints.
+
+    Tries to find a combination of 4 legal players that satisfies:
+    - Strongest player (r1) ≤ 3
+    - Rank spread (r4 - r1) ≤ 3
+    - Balanced pairing patterns
+    """
     legal = [c for c in candidates if not c["has_violations"]]
-    if len(legal) >= num_players:
-        return [c["name"] for c in legal[:num_players]]
+
+    if len(legal) < num_players:
+        return None
+
+    # Try combinations starting with least-used players
+    # Start with the first 4, then try sliding window
+    for i in range(len(legal) - num_players + 1):
+        team = legal[i:i + num_players]
+        players_with_ranks = [(c["name"], c["rank"]) for c in team]
+
+        # Check if this team satisfies balance constraints
+        is_valid, _ = check_doubles_balance(players_with_ranks)
+
+        if is_valid:
+            return [c["name"] for c in team]
+
+    # If no valid combination found, return None
     return None
 
 def select_players_for_slot(df_plan, slot_info, all_players, available_days, preferences, holidays):
@@ -637,6 +713,21 @@ def check_plan_violations(df_plan, available_days, preferences, holidays):
                     "Typ": typ,
                     "Spieler": f"{players[0]} vs {players[1]}",
                     "Violation": f"Rang-Differenz zu groß: |{r1} - {r2}| = {abs(r1 - r2)} > 2"
+                })
+
+        # Check doubles balance rule (HARD)
+        if typ.lower().startswith("doppel") and len(players) == 4:
+            players_with_ranks = [(p, RANK.get(p, 999)) for p in players]
+            is_valid, reason = check_doubles_balance(players_with_ranks)
+            if not is_valid:
+                ranks_str = ", ".join([f"{p}({RANK.get(p, '?')})" for p in players])
+                violations_list.append({
+                    "Datum": datum,
+                    "Tag": tag,
+                    "Slot": slot,
+                    "Typ": typ,
+                    "Spieler": ", ".join(players),
+                    "Violation": f"Doubles Balance (HARD): {reason}. Players: {ranks_str}"
                 })
 
     return violations_list
@@ -988,15 +1079,24 @@ with st.expander("ℹ️ Saison-Informationen 2026"):
     - Urlaube aus CSV (2026-01-01 bis 2026-04-26)
     - Spielerpräferenzen (nur Einzel/nur Doppel)
     - Verfügbarkeit nach Wochentagen
-    - Spieler-Rankings (Einzel: Rang-Differenz ≤ 2)
+    - Spieler-Rankings:
+      - Einzel: Rang-Differenz ≤ 2 (HARD)
+      - Doppel: Balancierte Teams mit Rang-Constraints (HARD - NEU!)
     - Load Balancing für faire Verteilung
     """)
 
-with st.expander("🏆 Spieler-Rankings"):
+with st.expander("🏆 Spieler-Rankings & Balancing-Regeln"):
     st.markdown("""
     **Ranking-System:** 1 (stärkster) bis 6 (schwächster)
 
-    **Regel für Einzel:** Rang-Differenz zwischen Spielern ≤ 2
+    **HARD-Regel für Einzel:** Rang-Differenz zwischen Spielern ≤ 2
+
+    **HARD-Regeln für Doppel (NEU):**
+    - Stärkster Spieler (r1) muss Rang ≤ 3 sein (nur Rang 1, 2, oder 3)
+    - Maximale Rang-Spanne: r4 - r1 ≤ 3 (z.B. 1-4, 2-5, 3-6)
+    - Balancierte Paarungen erforderlich:
+      - ENTWEDER: Ähnliches Quartett (alle innerhalb 2 Rängen)
+      - ODER: Zwei-stark vs Zwei-schwach (Paare mit Lücke dazwischen)
 
     **Quelle:** `Player_Ranks_2026.csv` (aus audit prompt.txt)
     """)
