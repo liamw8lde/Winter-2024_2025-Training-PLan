@@ -248,9 +248,12 @@ PLAYER RANKS (AUTHORITATIVE)
 ------------------------------------------------------------
 RANK RULES
 - Singles Rank Window (HARD): for players A,B in singles, |rank[A] − rank[B]| ≤ 2, else violation `singles_rank_window`.
-- Doubles Balance (SOFT/advisory): with ranks sorted r1 ≤ r2 ≤ r3 ≤ r4, flag `doubles_unbalanced_advisory` if neither:
-  (a) Similar quartet: r4 − r1 ≤ 2, nor
-  (b) Two-strong vs two-weak: (r2 − r1 ≤ 1) AND (r4 − r3 ≤ 1) AND (r3 − r2 ≥ 2).
+- Doubles Balance (HARD): with ranks sorted r1 ≤ r2 ≤ r3 ≤ r4, violation `doubles_balance` if ANY of:
+  (a) The strongest player rank r1 > 3 (i.e., r1 must be 1, 2, or 3)
+  (b) Rank spread r4 − r1 > 3 (maximum allowed range is 3, e.g., 1-4, 2-5, 3-6)
+  (c) Neither of the following balanced pairing patterns holds:
+      i)  Similar quartet: r4 − r1 ≤ 2, OR
+      ii) Two-strong vs two-weak: (r2 − r1 ≤ 1) AND (r4 − r3 ≤ 1) AND (r3 − r2 ≥ 2)
 
 ------------------------------------------------------------
 REPAIR ENGINE (do this AFTER first audit, then iterate)
@@ -271,7 +274,7 @@ REPAIR PRIORITY ORDER (apply in this order)
 7) Weekly coverage (missing/duplicate required slots) → fix within week where possible.
 8) Weekly & season caps → re-balance assignments without breaking earlier HARD rules.
 9) Singles rank window (HARD) → re-pair players; if impossible, flag UNREPAIRABLE.
-10) Doubles balance (SOFT) → improve if possible without affecting HARD constraints.
+10) Doubles balance (HARD) → re-arrange players to satisfy: r1≤3, r4−r1≤3, and balanced pairings; if impossible, flag UNREPAIRABLE.
 
 TIEBREAKERS (deterministic)
 - Prefer replacements from players already available that week and allowed by weekday availability.
@@ -297,7 +300,7 @@ A) Sanity Summary (compact JSON integers):
    - missing_required_weekly_slots;
    - kerstin_target {player, planned_total, target=6, shortfall};
    - singles_rank_window;
-   - doubles_unbalanced_advisory.
+   - doubles_balance.
 
 B) Violations table (+ downloadable CSV):
    Columns: Datum | Tag | Slot | Typ | Spieler | Betroffene/r | Regel | Details
@@ -309,7 +312,7 @@ C) Per-player weekly usage & caps (+ CSV):
 
 D) Helpful tables (optional):
    - Singles roster; Doubles roster; Players with >1 appearance on same date; Kerstin target check.
-   - Advisory list of `doubles_unbalanced_advisory` with player ranks.
+   - List of `doubles_balance` violations with player ranks.
 
 E) Corrected Plan (CSV):
    - Same layout/columns as input. 
