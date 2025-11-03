@@ -92,7 +92,7 @@ def get_github_defaults():
         or os.getenv("GH_TOKEN")
         or ""
     )
-    path = _get_streamlit_secret("GITHUB_PATH", CSV_FILE)
+    path = CSV_FILE  # Always use Spieler_Preferences_2026.csv for this script
     committer_name = (
         _get_streamlit_secret("GITHUB_COMMITTER_NAME")
         or os.getenv("GITHUB_COMMITTER_NAME")
