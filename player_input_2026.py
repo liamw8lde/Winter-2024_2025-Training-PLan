@@ -452,51 +452,6 @@ notes = st.text_area("Zusätzliche Hinweise", value=prev.get("Notes",""))
 
 github_defaults = get_github_defaults()
 
-if "github_settings" not in st.session_state:
-    st.session_state["github_settings"] = github_defaults.copy()
-
-with st.expander("GitHub Upload Einstellungen", expanded=False):
-    st.caption(
-        "Optional: Trage hier Repository, Branch und Token ein, wenn die Datei direkt in GitHub "
-        "aktualisiert werden soll."
-    )
-    repo_name_input = st.text_input(
-        "Repository (owner/name)",
-        value=st.session_state["github_settings"].get("repo", ""),
-    )
-    branch_name_input = st.text_input(
-        "Branch",
-        value=st.session_state["github_settings"].get("branch", ""),
-    )
-    path_input = st.text_input(
-        "Dateipfad im Repository",
-        value=st.session_state["github_settings"].get("path", CSV_FILE),
-    )
-    committer_name_input = st.text_input(
-        "Committer Name",
-        value=st.session_state["github_settings"].get("committer_name", ""),
-    )
-    committer_email_input = st.text_input(
-        "Committer E-Mail",
-        value=st.session_state["github_settings"].get("committer_email", ""),
-    )
-    token_input = st.text_input(
-        "GitHub Token",
-        value=st.session_state["github_settings"].get("token", ""),
-        type="password",
-    )
-
-    st.session_state["github_settings"] = {
-        "repo": repo_name_input,
-        "branch": branch_name_input,
-        "path": path_input,
-        "committer_name": committer_name_input,
-        "committer_email": committer_email_input,
-        "token": token_input,
-    }
-
-github_settings = st.session_state["github_settings"]
-
 st.subheader("Zusammenfassung")
 st.write(f"**Spieler:** {sel_player}")
 st.write(
@@ -532,32 +487,12 @@ if st.button("✅ Bestätigen und Speichern"):
     st.success("Gespeichert!")
     st.dataframe(df_all[df_all["Spieler"]==sel_player])
 
-    repo_name = (github_settings.get("repo") or github_defaults.get("repo") or "").strip()
-    branch_name_input = (
-        github_settings.get("branch")
-        or github_defaults.get("branch")
-        or ""
-    )
-    repo_path = (
-        github_settings.get("path")
-        or github_defaults.get("path")
-        or CSV_FILE
-    ).strip() or CSV_FILE
-    committer_name = (
-        github_settings.get("committer_name")
-        or github_defaults.get("committer_name")
-        or ""
-    ).strip()
-    committer_email = (
-        github_settings.get("committer_email")
-        or github_defaults.get("committer_email")
-        or ""
-    ).strip()
-    token_value = (
-        github_settings.get("token")
-        or github_defaults.get("token")
-        or ""
-    ).strip()
+    repo_name = (github_defaults.get("repo") or "").strip()
+    branch_name_input = (github_defaults.get("branch") or "")
+    repo_path = (github_defaults.get("path") or CSV_FILE).strip() or CSV_FILE
+    committer_name = (github_defaults.get("committer_name") or "").strip()
+    committer_email = (github_defaults.get("committer_email") or "").strip()
+    token_value = (github_defaults.get("token") or "").strip()
 
     committer_payload = None
     if committer_name and committer_email:
