@@ -861,87 +861,15 @@ def _select_singles_pair(candidates):
     # If no legal pair found, return None
     return None
 
-def _check_doubles_balance(players_with_ranks):
-    """
-    Check if 4 players satisfy HARD doubles balance constraints.
-
-    Args:
-        players_with_ranks: List of (name, rank) tuples for 4 players
-
-    Returns:
-        (is_valid, reason) tuple - is_valid is True if constraints satisfied
-
-    HARD Constraints:
-    - Strongest player (r1) must be rank ≤ 3
-    - Rank spread (r4 - r1) must be ≤ 3
-    - Must satisfy balanced pairing patterns
-    """
-    if len(players_with_ranks) != 4:
-        return False, "Need exactly 4 players"
-
-    # Extract ranks and sort
-    ranks = [r for (name, r) in players_with_ranks]
-
-    # Check for unknown ranks
-    if any(r == 999 or r is None for r in ranks):
-        return False, "Unknown ranks present"
-
-    # Sort ranks: r1 ≤ r2 ≤ r3 ≤ r4
-    sorted_ranks = sorted(ranks)
-    r1, r2, r3, r4 = sorted_ranks
-
-    # HARD: Strongest player must be rank ≤ 3
-    if r1 > 3:
-        return False, f"Strongest player rank {r1} > 3 (must be 1, 2, or 3)"
-
-    # HARD: Max rank spread is 3
-    spread = r4 - r1
-    if spread > 3:
-        return False, f"Rank spread {spread} > 3 (range {r1}-{r4})"
-
-    # HARD: Check balanced pairing patterns
-    # Pattern (i): Similar quartet - all within 2 ranks
-    similar_quartet = (r4 - r1) <= 2
-
-    # Pattern (ii): Two-strong vs two-weak
-    two_vs_two = (
-        (r2 - r1) <= 1 and  # Top pair close together
-        (r4 - r3) <= 1 and  # Bottom pair close together
-        (r3 - r2) >= 2      # Gap between pairs
-    )
-
-    if not (similar_quartet or two_vs_two):
-        return False, f"Unbalanced pairing: ranks {sorted_ranks} don't match required patterns"
-
-    return True, "OK"
-
 def _select_doubles_team(candidates, num_players):
-    """
-    Select 4 players for doubles match with HARD rank balance constraints.
-
-    Tries to find a combination of 4 legal players that satisfies:
-    - Strongest player (r1) ≤ 3
-    - Rank spread (r4 - r1) ≤ 3
-    - Balanced pairing patterns
-    """
+    """Select 4 players for doubles match"""
+    # Filter to only legal players first
     legal = [c for c in candidates if not c["has_violations"]]
 
-    if len(legal) < num_players:
-        return None
+    if len(legal) >= num_players:
+        return [c["name"] for c in legal[:num_players]]
 
-    # Try combinations starting with least-used players
-    # Start with the first 4, then try sliding window
-    for i in range(len(legal) - num_players + 1):
-        team = legal[i:i + num_players]
-        players_with_ranks = [(c["name"], c["rank"]) for c in team]
-
-        # Check if this team satisfies balance constraints
-        is_valid, _ = _check_doubles_balance(players_with_ranks)
-
-        if is_valid:
-            return [c["name"] for c in team]
-
-    # If no valid combination found, return None
+    # If not enough legal players, return None
     return None
 
 def autopopulate_plan(df_plan: pd.DataFrame, max_slots: int = None, only_legal: bool = True):
