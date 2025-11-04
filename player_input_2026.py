@@ -115,6 +115,8 @@ def get_github_defaults():
 
 
 def build_github_headers(token):
+    # Strip whitespace from token to avoid authentication errors
+    token = (token or "").strip()
     return {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
@@ -192,6 +194,19 @@ def update_github_file_via_api(
     author=None,
 ):
     """Create or update a file in the GitHub repository using the REST API."""
+    # Validate token before making API call
+    token = (token or "").strip()
+    if not token:
+        return False, ["❌ Fehler: GITHUB_TOKEN ist nicht konfiguriert. Bitte Token in Streamlit Cloud Secrets hinzufügen."]
+
+    # Check if token format looks valid
+    if not (token.startswith("ghp_") or token.startswith("github_pat_") or token.startswith("gho_")):
+        return False, [
+            "❌ Fehler: GITHUB_TOKEN hat ungültiges Format.",
+            f"   Token beginnt mit: '{token[:4]}...'",
+            "   Erwartet: Token sollte mit 'ghp_' (classic), 'github_pat_' (fine-grained), oder 'gho_' beginnen."
+        ]
+
     headers = build_github_headers(token)
     normalized_path = _normalize_github_path(path)
     base_url = f"https://api.github.com/repos/{repo}/contents/{normalized_path}"
@@ -212,6 +227,29 @@ def update_github_file_via_api(
         steps.append(f"✅ Aktuelle Datei gefunden (SHA {sha[:7] if sha else 'unbekannt'})")
     elif get_resp.status_code == 404:
         steps.append("ℹ️ Datei existiert noch nicht – sie wird neu erstellt.")
+    elif get_resp.status_code == 401:
+        error_message = get_resp.text
+        try:
+            error_message = get_resp.json().get("message", error_message)
+        except ValueError:
+            pass
+        return False, [
+            f"❌ GET {base_url} -> {get_resp.status_code}: {error_message}",
+            "",
+            "🔑 Das bedeutet: Der GitHub Token ist ungültig oder abgelaufen.",
+            "",
+            "✅ So beheben Sie das Problem:",
+            "1. Gehen Sie zu Streamlit Cloud: https://share.streamlit.io/",
+            "2. Öffnen Sie die App-Einstellungen (⋮ Menü → Settings)",
+            "3. Klicken Sie auf 'Secrets'",
+            "4. Erstellen Sie einen neuen GitHub Token: https://github.com/settings/tokens",
+            "   - Token Type: Classic",
+            "   - Scopes: Wählen Sie 'repo'",
+            "5. Fügen Sie den Token zu den Secrets hinzu:",
+            '   GITHUB_TOKEN = "ghp_ihr_neuer_token_hier"',
+            "",
+            f"📋 Aktueller Token beginnt mit: '{token[:8]}...' (Länge: {len(token)} Zeichen)"
+        ]
     else:
         error_message = get_resp.text
         try:
@@ -253,7 +291,15 @@ def update_github_file_via_api(
         error_message = put_resp.json().get("message", error_message)
     except ValueError:
         pass
-    steps.append(f"❌ PUT {base_url} -> {put_resp.status_code}: {error_message}")
+
+    if put_resp.status_code == 401:
+        steps.append(f"❌ PUT {base_url} -> {put_resp.status_code}: {error_message}")
+        steps.append("")
+        steps.append("🔑 Der GitHub Token ist ungültig, abgelaufen oder hat keine Schreibberechtigung.")
+        steps.append("   Bitte erstellen Sie einen neuen Token mit 'repo' Berechtigung.")
+    else:
+        steps.append(f"❌ PUT {base_url} -> {put_resp.status_code}: {error_message}")
+
     return False, steps
 
 def parse_blocked_ranges_from_csv(blocked_ranges_str):
