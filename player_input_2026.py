@@ -118,7 +118,7 @@ def build_github_headers(token):
     # Strip whitespace from token to avoid authentication errors
     token = (token or "").strip()
     return {
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"token {token}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
