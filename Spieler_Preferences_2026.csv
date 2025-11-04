@@ -1,5 +1,4 @@
 Spieler,ValidFrom,ValidTo,AvailableDays,Preference,BlockedRanges,BlockedDays,Notes,Timestamp
-Andreas Dank,2026-01-01,2026-04-26,Montag;Mittwoch,keine Präferenz,,,,2025-10-27T19:40:11Z
 Anke Ihde,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,nur Doppel,,,,2025-10-27T19:40:11Z
 Arndt Stüber,2026-01-01,2026-04-26,Mittwoch,keine Präferenz,,,,2025-10-27T19:40:11Z
 Bernd Robioneck,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-04,,,2025-10-27T19:40:11Z
@@ -40,4 +39,5 @@ Tobias Kahl,2026-01-01,2026-04-26,Montag;Mittwoch,keine Präferenz,,,,2025-10-27
 Torsten Bartel,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
 Wolfgang Aleksik,2026-01-01,2026-04-26,Mittwoch,keine Präferenz,,,,2025-10-27T19:40:11Z
 Liam Wilde,2026-01-01,2026-04-26,Montag;Donnerstag,keine Präferenz,,,afdssfa,2025-11-03 09:01:09
-Jens Krause,2026-01-01,2026-04-26,Mittwoch,keine Präferenz,,,nan,2025-11-03 15:06:40
+Jens Krause,2026-01-01,2026-04-26,Mittwoch,keine Präferenz,,,,2025-11-03 15:06:40
+Andreas Dank,2026-01-01,2026-04-26,Montag;Mittwoch,keine Präferenz,,,nan,2025-11-04 06:31:54
