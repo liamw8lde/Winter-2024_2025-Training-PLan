@@ -504,7 +504,7 @@ def github_headers():
     token = st.secrets.get("GITHUB_TOKEN")
     if not token:
         raise RuntimeError("GitHub token missing")
-    return {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    return {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
 
 def github_put_file(csv_bytes, message, file_path):
     """Save CSV to GitHub"""

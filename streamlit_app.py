@@ -78,7 +78,7 @@ def _github_headers():
     token = st.secrets.get("GITHUB_TOKEN")
     if not token:
         raise RuntimeError("GitHub token missing in st.secrets['GITHUB_TOKEN'].")
-    return {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    return {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
 
 def _gh_repo_info():
     repo   = st.secrets.get("GITHUB_REPO")            # e.g. "owner/repo"
