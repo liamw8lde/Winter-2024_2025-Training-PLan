@@ -1045,8 +1045,8 @@ with tab_auto:
             _, df_result_exp = postprocess_plan(st.session_state.df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]])
             player_counts = df_result_exp["Spieler_Name"].value_counts().reset_index()
             player_counts.columns = ["Spieler", "Anzahl Matches"]
-            # Add rankings
-            player_counts["Rang"] = player_counts["Spieler"].map(lambda x: RANK.get(x, "?"))
+            # Add rankings (convert to string to avoid mixed types)
+            player_counts["Rang"] = player_counts["Spieler"].map(lambda x: str(RANK.get(x, "?")))
             # Reorder columns
             player_counts = player_counts[["Spieler", "Rang", "Anzahl Matches"]]
             st.dataframe(player_counts, use_container_width=True, height=400)
