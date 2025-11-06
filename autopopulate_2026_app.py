@@ -288,6 +288,16 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
     """Check all violations for a player assignment"""
     violations = []
 
+    # Time conflict check - player cannot be in two places at once
+    same_datetime_mask = (
+        (df_after["Datum_dt"].dt.date == d) &
+        (df_after["S_Time"] == s_time) &
+        (df_after["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True))
+    )
+    if same_datetime_mask.any():
+        existing_slots = df_after[same_datetime_mask]["Slot"].tolist()
+        violations.append(f"{name}: bereits eingeteilt am {d} um {s_time} ({', '.join(existing_slots)}).")
+
     # Holiday check
     if is_holiday(name, d, holidays):
         violations.append(f"{name}: Urlaub/Blackout am {d}.")
