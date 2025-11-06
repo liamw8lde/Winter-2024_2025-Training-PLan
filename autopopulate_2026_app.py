@@ -995,9 +995,31 @@ with tab_auto:
             if filled:
                 with st.expander(f"✅ Gefüllte Slots ({len(filled)})"):
                     for slot in filled:
-                        players_str = ", ".join(slot["players"])
+                        players = slot["players"]
+                        typ = slot["Typ"]
+
+                        # Get player rankings
+                        player_ranks = [(p, RANK.get(p, "?")) for p in players]
+                        players_with_ranks = [f"{p} (Rang {r})" for p, r in player_ranks]
+                        players_str = ", ".join(players_with_ranks)
+
+                        # Calculate rank difference/spread
+                        ranks = [r for p, r in player_ranks if r != "?"]
+                        rank_info = ""
+                        if len(ranks) == len(players):  # All have valid ranks
+                            if typ.lower().startswith("einzel") and len(ranks) == 2:
+                                diff = abs(ranks[0] - ranks[1])
+                                emoji = "✅" if diff <= 2 else "❌"
+                                rank_info = f"  📊 Rang-Differenz: {diff} {emoji}"
+                            elif typ.lower().startswith("doppel") and len(ranks) == 4:
+                                spread = max(ranks) - min(ranks)
+                                emoji = "✅" if spread <= 3 else "❌"
+                                rank_info = f"  📊 Rang-Spread: {min(ranks)}-{max(ranks)} (Diff: {spread}) {emoji}"
+
                         st.write(f"**{slot['Datum']}** ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
                         st.write(f"  → {players_str}")
+                        if rank_info:
+                            st.write(rank_info)
                         st.write("")
 
             # Skipped slots details
@@ -1023,6 +1045,10 @@ with tab_auto:
             _, df_result_exp = postprocess_plan(st.session_state.df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]])
             player_counts = df_result_exp["Spieler_Name"].value_counts().reset_index()
             player_counts.columns = ["Spieler", "Anzahl Matches"]
+            # Add rankings
+            player_counts["Rang"] = player_counts["Spieler"].map(lambda x: RANK.get(x, "?"))
+            # Reorder columns
+            player_counts = player_counts[["Spieler", "Rang", "Anzahl Matches"]]
             st.dataframe(player_counts, use_container_width=True, height=400)
 
             # Save buttons
