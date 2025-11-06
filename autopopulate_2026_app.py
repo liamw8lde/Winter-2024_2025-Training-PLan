@@ -62,6 +62,11 @@ RANK_FALLBACK = {
 
 WOMEN_SINGLE_BAN = {"Anke Ihde", "Lena Meiss", "Martina Schmidt", "Kerstin Baarck"}
 
+# Partner preferences (enforced for doubles)
+PARTNER_PREFERENCES = {
+    "Bjoern Junker": ["Martin Lange"],  # Carpool from Schönkirchen
+}
+
 # ==================== DATA LOADING ====================
 @st.cache_data(show_spinner=False)
 def load_plan_csv(file_path):
@@ -382,10 +387,43 @@ def select_singles_pair(candidates):
     return None
 
 def select_doubles_team(candidates, num_players=4):
-    """Select 4 players for doubles"""
+    """Select 4 players for doubles, enforcing partner preferences"""
     legal = [c for c in candidates if not c["has_violations"]]
-    if len(legal) >= num_players:
-        return [c["name"] for c in legal[:num_players]]
+    if len(legal) < num_players:
+        return None
+
+    # Check for partner preferences
+    selected = []
+    remaining = legal.copy()
+
+    # First pass: enforce partner preferences
+    for candidate in legal:
+        player_name = candidate["name"]
+        if player_name in PARTNER_PREFERENCES:
+            preferred_partners = PARTNER_PREFERENCES[player_name]
+
+            # Check if any preferred partner is in the legal candidates
+            for partner_name in preferred_partners:
+                partner_candidate = next((c for c in remaining if c["name"] == partner_name), None)
+
+                if partner_candidate:
+                    # Add both the player and their preferred partner
+                    if player_name not in [s["name"] for s in selected]:
+                        selected.append(candidate)
+                    if partner_name not in [s["name"] for s in selected]:
+                        selected.append(partner_candidate)
+
+                    # Remove from remaining pool
+                    remaining = [c for c in remaining if c["name"] not in [player_name, partner_name]]
+                    break
+
+    # Second pass: fill remaining slots from the pool
+    while len(selected) < num_players and remaining:
+        selected.append(remaining.pop(0))
+
+    if len(selected) >= num_players:
+        return [c["name"] for c in selected[:num_players]]
+
     return None
 
 def select_players_for_slot(df_plan, slot_info, all_players, available_days, preferences, holidays):
