@@ -1,5 +1,4 @@
 Spieler,ValidFrom,ValidTo,AvailableDays,Preference,BlockedRanges,BlockedDays,Notes,Timestamp
-Arndt Stüber,2026-01-01,2026-04-26,Mittwoch,keine Präferenz,,,,2025-10-27T19:40:11Z
 Bernd Robioneck,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-04,,,2025-10-27T19:40:11Z
 Bernd Sotzek,2026-01-01,2026-04-26,Montag;Mittwoch,keine Präferenz,2026-01-01→2026-01-04,,,2025-10-27T19:40:11Z
 Bjoern Junker,2026-01-01,2026-04-26,Montag,keine Präferenz,,,,2025-10-27T19:40:11Z
@@ -44,3 +43,4 @@ Karsten Usinger,2026-01-01,2026-04-26,Donnerstag;Montag,keine Präferenz,,,,2025
 Lars Staubermann,2026-01-01,2026-04-26,Montag;Donnerstag,keine Präferenz,2026-03-23→2026-04-12,,,2025-11-06 06:09:43
 Heiko Thomsen,2026-01-01,2026-04-26,Mittwoch,keine Präferenz,,,,2025-11-06 06:13:09
 Ralf Colditz,2026-01-01,2026-04-26,Mittwoch,nur Einzel,2026-01-01→2026-01-03;2026-03-01→2026-04-26,,,2025-11-06 06:49:57
+Arndt Stüber,2026-01-01,2026-04-26,Mittwoch,nur Einzel,2026-02-06→2026-02-15;2026-03-21→2026-04-12,,Bitte nicht später als 19:00Uhr starten - vielen Dank!,2025-11-06 06:55:43
