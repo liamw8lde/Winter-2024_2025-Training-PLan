@@ -67,6 +67,11 @@ PARTNER_PREFERENCES = {
     "Bjoern Junker": ["Martin Lange"],  # Carpool from Schönkirchen
 }
 
+# Monthly match limits (player -> max matches per month)
+MONTHLY_LIMITS = {
+    "Peter Plaehn": 3,  # "2-3 X im Monat" -> max 3
+}
+
 # ==================== DATA LOADING ====================
 @st.cache_data(show_spinner=False)
 def load_plan_csv(file_path):
@@ -255,6 +260,15 @@ def count_week(df_plan, name, d):
 def count_season(df_plan, name):
     return int(df_plan["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum())
 
+def count_month(df_plan, name, d):
+    """Count matches for a player in the same month as date d"""
+    year = d.year
+    month = d.month
+    # Filter by year-month
+    month_mask = (df_plan["Datum_dt"].dt.year == year) & (df_plan["Datum_dt"].dt.month == month)
+    month_df = df_plan[month_mask]
+    return int(month_df["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum())
+
 def count_wed20(df_plan, name):
     mask = (
         (df_plan["Tag"] == "Mittwoch") &
@@ -312,6 +326,13 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
         violations.append(f"{name}: nur Mittwoch 19:00.")
     if typ.lower().startswith("einzel") and name in WOMEN_SINGLE_BAN:
         violations.append(f"{name}: Frauen dürfen kein Einzel spielen.")
+
+    # Monthly match limits
+    if name in MONTHLY_LIMITS:
+        max_monthly = MONTHLY_LIMITS[name]
+        month_count = count_month(df_after, name, d)
+        if month_count >= max_monthly:
+            violations.append(f"{name}: max {max_monthly}/Monat überschritten ({month_count} bereits geplant).")
 
     # Type preferences
     pref = preferences.get(name, "keine Präferenz")
