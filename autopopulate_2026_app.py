@@ -295,8 +295,11 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
         (df_after["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True))
     )
     if same_datetime_mask.any():
-        existing_slots = df_after[same_datetime_mask]["Slot"].tolist()
-        violations.append(f"{name}: bereits eingeteilt am {d} um {s_time} ({', '.join(existing_slots)}).")
+        existing_slots = df_after[same_datetime_mask]["Slot"].unique().tolist()
+        # Only flag if player is in MORE THAN ONE slot at the same datetime
+        # (Being in one slot is normal, being in two or more is a conflict)
+        if len(existing_slots) > 1:
+            violations.append(f"{name}: bereits eingeteilt am {d} um {s_time} ({', '.join(existing_slots)}).")
 
     # Holiday check
     if is_holiday(name, d, holidays):
