@@ -408,7 +408,7 @@ def select_singles_pair(candidates):
     return None
 
 def select_doubles_team(candidates, num_players=4):
-    """Select 4 players for doubles, enforcing partner preferences"""
+    """Select 4 players for doubles, enforcing partner preferences and rank difference ≤ 3"""
     legal = [c for c in candidates if not c["has_violations"]]
     if len(legal) < num_players:
         return None
@@ -439,11 +439,33 @@ def select_doubles_team(candidates, num_players=4):
                     break
 
     # Second pass: fill remaining slots from the pool
+    # Try to build a team with rank spread ≤ 3
     while len(selected) < num_players and remaining:
-        selected.append(remaining.pop(0))
+        candidate = remaining.pop(0)
+
+        # Check rank spread if we add this candidate
+        test_selected = selected + [candidate]
+        ranks = [c["rank"] for c in test_selected if c["rank"] != 999]
+
+        # If all have valid ranks, check spread
+        if len(ranks) == len(test_selected):
+            rank_spread = max(ranks) - min(ranks)
+            if rank_spread <= 3:
+                selected.append(candidate)
+            # else: skip this candidate, try next one
+        else:
+            # Some players don't have ranks, accept anyway
+            selected.append(candidate)
 
     if len(selected) >= num_players:
-        return [c["name"] for c in selected[:num_players]]
+        # Final check: verify rank spread for the team
+        final_team = selected[:num_players]
+        ranks = [c["rank"] for c in final_team if c["rank"] != 999]
+        if len(ranks) == num_players:  # All have valid ranks
+            rank_spread = max(ranks) - min(ranks)
+            if rank_spread > 3:
+                return None  # Rank spread too large
+        return [c["name"] for c in final_team]
 
     return None
 
@@ -697,6 +719,24 @@ def check_plan_violations(df_plan, available_days, preferences, holidays):
                     "Spieler": f"{players[0]} vs {players[1]}",
                     "Violation": f"Rang-Differenz zu groß: |{r1} - {r2}| = {abs(r1 - r2)} > 2"
                 })
+
+        # Check doubles rank rule
+        if typ.lower().startswith("doppel") and len(players) == 4:
+            ranks = [RANK.get(p, 999) for p in players]
+            valid_ranks = [r for r in ranks if r != 999]
+            if len(valid_ranks) == 4:  # All players have ranks
+                max_rank = max(valid_ranks)
+                min_rank = min(valid_ranks)
+                rank_spread = max_rank - min_rank
+                if rank_spread > 3:
+                    violations_list.append({
+                        "Datum": datum,
+                        "Tag": tag,
+                        "Slot": slot,
+                        "Typ": typ,
+                        "Spieler": ", ".join(players),
+                        "Violation": f"Doppel Rang-Differenz zu groß: {max_rank} - {min_rank} = {rank_spread} > 3"
+                    })
 
     return violations_list
 
@@ -1047,7 +1087,7 @@ with st.expander("ℹ️ Saison-Informationen 2026"):
     - Urlaube aus CSV (2026-01-01 bis 2026-04-26)
     - Spielerpräferenzen (nur Einzel/nur Doppel)
     - Verfügbarkeit nach Wochentagen
-    - Spieler-Rankings (Einzel: Rang-Differenz ≤ 2)
+    - Spieler-Rankings (Einzel: Rang-Differenz ≤ 2, Doppel: Rang-Differenz ≤ 3)
     - Load Balancing für faire Verteilung
     """)
 
@@ -1055,7 +1095,9 @@ with st.expander("🏆 Spieler-Rankings"):
     st.markdown("""
     **Ranking-System:** 1 (stärkster) bis 6 (schwächster)
 
-    **Regel für Einzel:** Rang-Differenz zwischen Spielern ≤ 2
+    **Regel für Einzel:** Rang-Differenz zwischen 2 Spielern ≤ 2
+
+    **Regel für Doppel:** Rang-Differenz zwischen stärkster und schwächster Spieler ≤ 3
 
     **Quelle:** `Player_Ranks_2026.csv` (aus audit prompt.txt)
     """)
