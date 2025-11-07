@@ -72,6 +72,11 @@ MONTHLY_LIMITS = {
     "Peter Plaehn": 3,  # "2-3 X im Monat" -> max 3
 }
 
+# Season match limits (player -> max matches per season)
+SEASON_LIMITS = {
+    "Torsten Bartel": 5,  # Max 5 matches for entire 2026 season
+}
+
 # ==================== DATA LOADING ====================
 @st.cache_data(show_spinner=False)
 def load_plan_csv(file_path):
@@ -346,6 +351,13 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
         month_count = count_month(df_after, name, d)
         if month_count >= max_monthly:
             violations.append(f"{name}: max {max_monthly}/Monat überschritten ({month_count} bereits geplant).")
+
+    # Season match limits
+    if name in SEASON_LIMITS:
+        max_season = SEASON_LIMITS[name]
+        season_count = count_season(df_after, name)
+        if season_count >= max_season:
+            violations.append(f"{name}: max {max_season}/Saison überschritten ({season_count} bereits geplant).")
 
     # Type preferences
     pref = preferences.get(name, "keine Präferenz")
