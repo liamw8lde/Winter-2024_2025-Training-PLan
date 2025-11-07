@@ -262,6 +262,12 @@ def count_week(df_plan, name, d):
     wk = df_plan[(df_plan["Jahr"] == y) & (df_plan["Woche"] == w)]
     return int(wk["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum())
 
+def count_day(df_plan, name, d):
+    """Count matches for a player on a specific date"""
+    day_mask = df_plan["Datum_dt"].dt.date == d
+    day_df = df_plan[day_mask]
+    return int(day_df["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum())
+
 def count_season(df_plan, name):
     return int(df_plan["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum())
 
@@ -306,6 +312,19 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
         if len(existing_slots) > 1:
             violations.append(f"{name}: bereits eingeteilt am {d} um {s_time} ({', '.join(existing_slots)}).")
 
+    # Daily limit check - max 1 match per day
+    # Note: df_after includes the current assignment, so count > 1 means player already has another match
+    day_count = count_day(df_after, name, d)
+    if day_count > 1:
+        violations.append(f"{name}: max 1 Spiel/Tag überschritten ({day_count} Spiele am {d}).")
+
+    # Weekly limit check - max 1 match per week
+    # Note: df_after includes the current assignment, so count > 1 means player already has another match
+    week_count = count_week(df_after, name, d)
+    if week_count > 1:
+        y, w = week_of(d)
+        violations.append(f"{name}: max 1 Spiel/Woche überschritten ({week_count} Spiele in Woche {w}/{y}).")
+
     # Holiday check
     if is_holiday(name, d, holidays):
         violations.append(f"{name}: Urlaub/Blackout am {d}.")
@@ -327,8 +346,6 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
             violations.append(f"{name}: nur Mo/Mi/Do.")
         if tag == "Mittwoch" and s_time != "19:00":
             violations.append(f"{name}: am Mittwoch nur 19:00.")
-        if count_week(df_after, name, d) > 2:
-            violations.append(f"{name}: max 2/Woche überschritten.")
     if name == "Arndt Stueber" and not (tag == "Mittwoch" and s_time == "19:00"):
         violations.append(f"{name}: nur Mittwoch 19:00.")
     if name in {"Thommy Grueneberg", "Thomas Grueneberg"}:
