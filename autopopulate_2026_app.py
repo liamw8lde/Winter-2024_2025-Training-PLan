@@ -88,6 +88,9 @@ SEASON_TARGETS = {
     "Thomas Grueneberg": 11,  # "Würde gerne einmal pro Woche spielen!"
 }
 
+# Singles variety constraint - max times same pairing can occur
+MAX_SINGLES_REPEATS = 3  # Same two players can only play each other max 3 times in singles
+
 # ==================== DATA LOADING ====================
 @st.cache_data(show_spinner=False)
 def load_plan_csv(file_path):
@@ -306,6 +309,25 @@ def count_18_19(df_plan, name):
     )
     return int(mask.sum())
 
+def count_singles_pairing(df_plan, name1, name2):
+    """Count how many times two players have played singles together"""
+    # Filter for singles matches only
+    singles_mask = df_plan["Typ"].str.lower().str.startswith("einzel")
+    singles_df = df_plan[singles_mask]
+
+    # Count matches where both players are present
+    count = 0
+    for _, row in singles_df.iterrows():
+        players_str = row["Spieler"]
+        if pd.notna(players_str):
+            # Check if both players are in this match
+            has_name1 = bool(re.search(fr"\b{re.escape(name1)}\b", players_str))
+            has_name2 = bool(re.search(fr"\b{re.escape(name2)}\b", players_str))
+            if has_name1 and has_name2:
+                count += 1
+
+    return count
+
 def check_violations(name, tag, s_time, typ, df_after, d, available_days, preferences, holidays):
     """Check all violations for a player assignment"""
     violations = []
@@ -521,8 +543,8 @@ def can_schedule_paired_partner(name, d, s_time, df_after, available_days, prefe
     return True
 
 # ==================== AUTOPOPULATION ALGORITHM ====================
-def select_singles_pair(candidates):
-    """Select 2 players for singles with rank difference ≤ 2"""
+def select_singles_pair(candidates, df_plan):
+    """Select 2 players for singles with rank difference ≤ 2 and variety constraint"""
     for i, c1 in enumerate(candidates):
         if c1["has_violations"]:
             break
@@ -532,6 +554,11 @@ def select_singles_pair(candidates):
             r1 = c1["rank"]
             r2 = c2["rank"]
             if r1 != 999 and r2 != 999 and abs(r1 - r2) <= 2:
+                # Check singles variety constraint
+                pairing_count = count_singles_pairing(df_plan, c1["name"], c2["name"])
+                if pairing_count >= MAX_SINGLES_REPEATS:
+                    # This pairing has occurred too many times, skip it
+                    continue
                 return [c1["name"], c2["name"]]
     return None
 
@@ -689,7 +716,7 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
 
     # Select players
     if typ.lower().startswith("einzel"):
-        return select_singles_pair(filtered)
+        return select_singles_pair(filtered, df_plan)
     else:
         return select_doubles_team(filtered, num_players)
 
