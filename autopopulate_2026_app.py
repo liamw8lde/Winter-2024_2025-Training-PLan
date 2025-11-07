@@ -891,7 +891,7 @@ if st.session_state.get("run_error_check", False):
 st.markdown("---")
 
 # Create tabs
-tab_auto, tab_calendar, tab_rankings = st.tabs(["🤖 Auto-Population", "📅 Spieler-Kalender", "🏆 Spieler-Rankings"])
+tab_auto, tab_calendar, tab_rankings, tab_player = st.tabs(["🤖 Auto-Population", "📅 Spieler-Kalender", "🏆 Spieler-Rankings", "👤 Spieler-Profil"])
 
 with tab_calendar:
     st.header("📅 Spieler-Kalender Übersicht")
@@ -1252,6 +1252,153 @@ with tab_rankings:
         - Tobias Kahl spielt besser → Rang von 5 auf 4 ändern
         - Speichern → Rankings aktualisiert!
         """)
+
+with tab_player:
+    st.header("👤 Spieler-Profil")
+    st.caption("Detaillierte Informationen und geplante Matches für jeden Spieler")
+
+    # Player selection dropdown
+    if all_players:
+        selected_player = st.selectbox(
+            "Wähle einen Spieler:",
+            options=sorted(all_players),
+            index=0
+        )
+
+        if selected_player:
+            st.markdown("---")
+
+            # Get player info from preferences
+            player_prefs = df_prefs[df_prefs["Spieler"] == selected_player]
+
+            if not player_prefs.empty:
+                player_row = player_prefs.iloc[0]
+
+                # Display player information in columns
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.subheader("📋 Spieler-Information")
+
+                    # Rank
+                    player_rank = RANK.get(selected_player, "Nicht festgelegt")
+                    st.metric("Rang", player_rank, help="1 = Stärkster, 6 = Schwächster")
+
+                    # Preference
+                    pref = player_row.get("Preference", "keine Präferenz")
+                    pref_emoji = "🎾" if pref == "nur Einzel" else "👥" if pref == "nur Doppel" else "🔄"
+                    st.write(f"**Spielart-Präferenz:** {pref_emoji} {pref}")
+
+                    # Available days
+                    avail_days = available_days.get(selected_player, set())
+                    if avail_days:
+                        days_str = ", ".join(sorted(avail_days))
+                        st.write(f"**Verfügbare Tage:** {days_str}")
+                    else:
+                        st.write("**Verfügbare Tage:** Keine Angabe")
+
+                with col2:
+                    st.subheader("📅 Urlaub & Notizen")
+
+                    # Holidays
+                    player_holidays = holidays.get(selected_player, [])
+                    if player_holidays:
+                        st.write("**Urlaub/Gesperrt:**")
+                        for start, end in player_holidays:
+                            if start == end:
+                                st.write(f"  • {start.strftime('%d.%m.%Y')}")
+                            else:
+                                st.write(f"  • {start.strftime('%d.%m.%Y')} → {end.strftime('%d.%m.%Y')}")
+                    else:
+                        st.write("**Urlaub:** Keine Einträge")
+
+                    # Notes
+                    notes = player_row.get("Notes", "")
+                    if notes and str(notes).strip() and str(notes) != "nan":
+                        st.write("**Notizen:**")
+                        st.info(str(notes))
+
+                # Get player's matches from current plan
+                st.markdown("---")
+                st.subheader("🎾 Geplante Matches")
+
+                # Use the working plan or result plan
+                display_plan = st.session_state.get("df_result", st.session_state.df_work)
+
+                if len(display_plan) > 0:
+                    # Filter matches with this player
+                    player_matches = display_plan[
+                        display_plan["Spieler"].str.contains(fr"\b{re.escape(selected_player)}\b", regex=True)
+                    ].copy()
+
+                    if len(player_matches) > 0:
+                        st.write(f"**{len(player_matches)} Matches geplant**")
+
+                        # Show statistics
+                        col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
+
+                        with col_stat1:
+                            einzel_count = player_matches[player_matches["Typ"].str.contains("Einzel", case=False)].shape[0]
+                            st.metric("Einzel", einzel_count)
+
+                        with col_stat2:
+                            doppel_count = player_matches[player_matches["Typ"].str.contains("Doppel", case=False)].shape[0]
+                            st.metric("Doppel", doppel_count)
+
+                        with col_stat3:
+                            # Count by month
+                            if "Datum_dt" in player_matches.columns:
+                                unique_months = player_matches["Datum_dt"].dt.to_period('M').nunique()
+                                st.metric("Monate aktiv", unique_months)
+
+                        with col_stat4:
+                            # Avg per week
+                            if "Woche" in player_matches.columns:
+                                unique_weeks = player_matches["Woche"].nunique()
+                                if unique_weeks > 0:
+                                    avg_per_week = len(player_matches) / unique_weeks
+                                    st.metric("Ø pro Woche", f"{avg_per_week:.1f}")
+
+                        st.markdown("---")
+
+                        # Show matches table
+                        display_matches = player_matches[["Datum", "Tag", "Slot", "Typ", "Spieler"]].copy()
+
+                        # Add teammates/opponents column
+                        def get_partners(row):
+                            all_players = [p.strip() for p in str(row["Spieler"]).split(",")]
+                            partners = [p for p in all_players if p != selected_player]
+                            return ", ".join(partners)
+
+                        display_matches["Mitspieler"] = display_matches.apply(get_partners, axis=1)
+
+                        # Reorder columns
+                        display_matches = display_matches[["Datum", "Tag", "Slot", "Typ", "Mitspieler"]]
+
+                        # Display table
+                        st.dataframe(
+                            display_matches,
+                            use_container_width=True,
+                            height=400,
+                            hide_index=True
+                        )
+
+                        # Download option
+                        csv_bytes = display_matches.to_csv(index=False).encode("utf-8")
+                        st.download_button(
+                            f"📥 {selected_player}'s Matches als CSV",
+                            data=csv_bytes,
+                            file_name=f"{selected_player.replace(' ', '_')}_Matches_2026.csv",
+                            mime="text/csv"
+                        )
+                    else:
+                        st.info(f"🔍 Keine Matches für {selected_player} im aktuellen Plan gefunden.")
+                else:
+                    st.info("📭 Der Plan ist noch leer. Verwende die Auto-Population, um Slots zu füllen.")
+            else:
+                st.warning(f"⚠️ Keine Präferenzen für {selected_player} gefunden in {PREFS_FILE}")
+    else:
+        st.warning("⚠️ Keine Spieler gefunden. Bitte lade die Preferences-Datei.")
 
 # Documentation
 st.markdown("---")
