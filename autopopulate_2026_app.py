@@ -74,7 +74,7 @@ MONTHLY_LIMITS = {
 
 # Season match limits (player -> max matches per season)
 SEASON_LIMITS = {
-    "Torsten Bartel": 5,  # Max 5 matches for entire 2026 season
+    "Torsten Bartel": 3,  # Max 3 matches for entire 2026 season
 }
 
 # ==================== DATA LOADING ====================
