@@ -884,7 +884,7 @@ if st.session_state.get("run_error_check", False):
 st.markdown("---")
 
 # Create tabs
-tab_auto, tab_calendar = st.tabs(["🤖 Auto-Population", "📅 Spieler-Kalender"])
+tab_auto, tab_calendar, tab_rankings = st.tabs(["🤖 Auto-Population", "📅 Spieler-Kalender", "🏆 Spieler-Rankings"])
 
 with tab_calendar:
     st.header("📅 Spieler-Kalender Übersicht")
@@ -1096,6 +1096,155 @@ with tab_auto:
 
     else:
         st.success("🎉 Keine leeren Slots für 2026 gefunden! Der Plan ist vollständig.")
+
+with tab_rankings:
+    st.header("🏆 Spieler-Rankings Verwaltung")
+    st.caption("Verwalte Spieler-Rankings (1=stärkster, 6=schwächster)")
+
+    # Check for missing players
+    all_players_from_prefs = set(df_prefs["Spieler"].dropna().unique()) if not df_prefs.empty else set()
+    players_with_ranks = set(RANK.keys())
+    missing_players = all_players_from_prefs - players_with_ranks
+
+    if missing_players:
+        st.warning(f"⚠️ **{len(missing_players)} Spieler ohne Rang gefunden!**")
+        with st.expander(f"📋 Spieler ohne Rang ({len(missing_players)})", expanded=True):
+            for player in sorted(missing_players):
+                st.write(f"• {player}")
+            st.info("💡 Füge diese Spieler unten zur Rangliste hinzu.")
+
+    # Initialize session state for rankings if not exists
+    if "edited_ranks" not in st.session_state:
+        st.session_state.edited_ranks = RANK.copy()
+
+    st.markdown("---")
+    st.subheader("📊 Aktuelle Rankings")
+
+    # Create editable dataframe
+    rank_data = []
+    for player, rank in sorted(st.session_state.edited_ranks.items(), key=lambda x: (x[1], x[0])):
+        rank_data.append({"Spieler": player, "Rang": rank})
+
+    rank_df = pd.DataFrame(rank_data)
+
+    # Use data_editor for editing
+    st.write("**Bearbeite Rankings:** (Doppelklick auf Rang-Zelle zum Ändern)")
+    edited_df = st.data_editor(
+        rank_df,
+        use_container_width=True,
+        num_rows="dynamic",  # Allow adding/deleting rows
+        height=500,
+        column_config={
+            "Spieler": st.column_config.TextColumn("Spieler", required=True),
+            "Rang": st.column_config.NumberColumn(
+                "Rang",
+                min_value=1,
+                max_value=6,
+                required=True,
+                help="1 = Stärkster, 6 = Schwächster"
+            )
+        },
+        hide_index=True,
+        key="rank_editor"
+    )
+
+    # Show rank distribution
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("📈 Verteilung nach Rang")
+        rank_counts = edited_df["Rang"].value_counts().sort_index()
+        rank_dist = pd.DataFrame({
+            "Rang": range(1, 7),
+            "Anzahl": [rank_counts.get(i, 0) for i in range(1, 7)]
+        })
+        st.dataframe(rank_dist, use_container_width=True, hide_index=True)
+
+    with col2:
+        st.subheader("✅ Statistiken")
+        st.metric("Spieler mit Rang", len(edited_df))
+        st.metric("Spieler ohne Rang", len(missing_players))
+        st.metric("Gesamt Spieler", len(all_players_from_prefs))
+
+    # Save buttons
+    st.markdown("---")
+    col_save, col_download, col_reset = st.columns(3)
+
+    with col_save:
+        if st.button("💾 Rankings speichern", use_container_width=True, type="primary"):
+            try:
+                # Update session state
+                new_ranks = {}
+                for _, row in edited_df.iterrows():
+                    player = str(row["Spieler"]).strip()
+                    rank = int(row["Rang"])
+                    if player:  # Ignore empty rows
+                        new_ranks[player] = rank
+
+                st.session_state.edited_ranks = new_ranks
+
+                # Save to CSV
+                rank_save_df = pd.DataFrame([
+                    {"Spieler": player, "Rank": rank}
+                    for player, rank in sorted(new_ranks.items())
+                ])
+                csv_bytes = rank_save_df.to_csv(index=False).encode("utf-8")
+
+                # Save to GitHub
+                msg = f"Update player rankings (edited in Rankings tab)\n\n🎾 {len(new_ranks)} players ranked"
+                github_put_file(csv_bytes, msg, RANK_FILE)
+
+                st.success(f"✅ Rankings erfolgreich gespeichert! {len(new_ranks)} Spieler aktualisiert.")
+                st.info("🔄 Lade die Seite neu, um die aktualisierten Rankings zu verwenden.")
+                st.balloons()
+            except Exception as e:
+                st.error(f"Fehler beim Speichern: {e}")
+
+    with col_download:
+        # Download CSV
+        rank_save_df = pd.DataFrame([
+            {"Spieler": player, "Rank": int(rank)}
+            for _, (player, rank) in edited_df.iterrows()
+            if str(player).strip()
+        ])
+        csv_bytes = rank_save_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "📥 Rankings als CSV",
+            data=csv_bytes,
+            file_name=RANK_FILE,
+            mime="text/csv",
+            use_container_width=True
+        )
+
+    with col_reset:
+        if st.button("🔄 Änderungen verwerfen", use_container_width=True):
+            st.session_state.edited_ranks = RANK.copy()
+            st.rerun()
+
+    # Help section
+    st.markdown("---")
+    with st.expander("ℹ️ Hilfe: Wie verwende ich die Rankings-Verwaltung?"):
+        st.markdown("""
+        ### Rankings bearbeiten:
+        1. **Rang ändern:** Doppelklick auf eine Rang-Zelle → neue Zahl eingeben (1-6)
+        2. **Spieler hinzufügen:** Klicke auf die leere Zeile am Ende der Tabelle
+        3. **Spieler löschen:** Wähle Zeile aus und drücke Entf-Taste
+
+        ### Rang-Bedeutung:
+        - **Rang 1:** Stärkster Spieler (z.B. Patrick Buehrsch, Bjoern Junker)
+        - **Rang 2-3:** Starke Spieler
+        - **Rang 4-5:** Durchschnittliche Spieler
+        - **Rang 6:** Anfänger/Schwächste Spieler
+
+        ### Regeln:
+        - **Einzel:** Rang-Differenz max 2 (z.B. Rang 2 vs Rang 4 ✅)
+        - **Doppel:** Rang-Spread max 3 (z.B. Team mit Rang 1,2,3,4 ✅)
+
+        ### Beispiel: Spieler verbessert sich:
+        - Tobias Kahl spielt besser → Rang von 5 auf 4 ändern
+        - Speichern → Rankings aktualisiert!
+        """)
 
 # Documentation
 st.markdown("---")
