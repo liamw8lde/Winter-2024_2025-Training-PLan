@@ -62,6 +62,11 @@ RANK_FALLBACK = {
 
 WOMEN_SINGLE_BAN = {"Anke Ihde", "Lena Meiss", "Martina Schmidt", "Kerstin Baarck"}
 
+# Paired players - must play at the same time (different courts OK)
+PAIRED_PLAYERS = [
+    ("Lena Meiss", "Kerstin Baarck"),  # Must play at same time
+]
+
 # Partner preferences (enforced for doubles)
 PARTNER_PREFERENCES = {
     "Bjoern Junker": ["Martin Lange"],  # Carpool from Schönkirchen
@@ -362,6 +367,28 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
     if typ.lower().startswith("einzel") and name in WOMEN_SINGLE_BAN:
         violations.append(f"{name}: Frauen dürfen kein Einzel spielen.")
 
+    # Paired players check - must play at same time (they live together)
+    for pair in PAIRED_PLAYERS:
+        if name in pair:
+            # Find the partner(s)
+            partners = [p for p in pair if p != name]
+            for partner in partners:
+                # Check if partner is scheduled at all on this day
+                partner_same_day = df_after[
+                    (df_after["Datum_dt"].dt.date == d) &
+                    (df_after["Spieler"].str.contains(fr"\b{re.escape(partner)}\b", regex=True))
+                ]
+
+                if not partner_same_day.empty:
+                    # Partner IS scheduled on this day - must be at same time
+                    partner_times = partner_same_day["S_Time"].unique()
+                    if s_time not in partner_times:
+                        violations.append(f"{name}: muss zur gleichen Zeit wie {partner} spielen (Partner spielt um {', '.join(partner_times)}).")
+                else:
+                    # Partner is NOT scheduled yet - ensure they CAN be scheduled at same time
+                    if not can_schedule_paired_partner(name, d, s_time, df_after, available_days, preferences, holidays):
+                        violations.append(f"{name}: Partner {partner} kann nicht zur gleichen Zeit ({s_time}) eingeteilt werden.")
+
     # Monthly match limits
     if name in MONTHLY_LIMITS:
         max_monthly = MONTHLY_LIMITS[name]
@@ -433,6 +460,58 @@ def find_empty_slots(df_plan):
             empty.append(slot)
 
     return empty
+
+def can_schedule_paired_partner(name, d, s_time, df_after, available_days, preferences, holidays):
+    """Check if a paired player's partner can be scheduled at the same time"""
+    for pair in PAIRED_PLAYERS:
+        if name in pair:
+            partners = [p for p in pair if p != name]
+            for partner in partners:
+                # Check if partner is already scheduled on this day
+                partner_same_day = df_after[
+                    (df_after["Datum_dt"].dt.date == d) &
+                    (df_after["Spieler"].str.contains(fr"\b{re.escape(partner)}\b", regex=True))
+                ]
+
+                if partner_same_day.empty:
+                    # Partner not scheduled yet - check if there's an available slot at same time
+                    # Look for empty slots at this date/time
+                    empty_at_time = [slot for slot in generate_allowed_slots_calendar_2026()
+                                    if slot["Datum"] == d]
+
+                    # Filter for same time
+                    same_time_slots = []
+                    for slot in empty_at_time:
+                        time_match = re.search(r"(\d{2}:\d{2})", slot["Slot"])
+                        slot_time = time_match.group(1) if time_match else "00:00"
+                        if slot_time == s_time:
+                            # Check if this slot is already filled
+                            is_filled = df_after[
+                                (df_after["Datum_dt"].dt.date == d) &
+                                (df_after["Slot"] == slot["Slot"])
+                            ]
+                            if is_filled.empty:
+                                same_time_slots.append(slot)
+
+                    if not same_time_slots:
+                        # No available slot at the same time for partner
+                        return False
+
+                    # Check if partner is available/legal
+                    partner_days = available_days.get(partner)
+                    if partner_days is not None:
+                        tag = same_time_slots[0]["Tag"]
+                        if tag not in partner_days:
+                            return False
+
+                    if is_holiday(partner, d, holidays):
+                        return False
+
+                    partner_week_count = count_week(df_after, partner, d)
+                    if partner_week_count >= 1:
+                        return False
+
+    return True
 
 # ==================== AUTOPOPULATION ALGORITHM ====================
 def select_singles_pair(candidates):
@@ -557,6 +636,22 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
                 else:
                     ratio_score = 10   # Deprioritize
 
+        # Check if this player's paired partner was just scheduled at same time/date
+        paired_boost = 0
+        for pair in PAIRED_PLAYERS:
+            if name in pair:
+                partners = [p for p in pair if p != name]
+                for partner in partners:
+                    # Check if partner is scheduled at this exact date/time
+                    partner_at_same_time = df_plan[
+                        (df_plan["Datum_dt"].dt.date == datum) &
+                        (df_plan["S_Time"] == slot_time) &
+                        (df_plan["Spieler"].str.contains(fr"\b{re.escape(partner)}\b", regex=True))
+                    ]
+                    if not partner_at_same_time.empty:
+                        # Partner is scheduled at same time - give huge priority boost
+                        paired_boost = -1000
+
         # Simulate adding player
         y, w = week_of(datum)
         virtual = pd.DataFrame([{
@@ -580,6 +675,7 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
             "season": season_count,
             "rank": rk,
             "violations": viol,
+            "paired_boost": paired_boost,
             "has_violations": len(viol) > 0,
             "ratio_score": ratio_score,
             "singles_count": singles_count,
@@ -596,9 +692,10 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
             continue
         filtered.append(c)
 
-    # Sort: legal first, then by ratio balance, then by usage (season, week), then rank
+    # Sort: legal first, then by paired boost (very high priority), then by ratio balance, then by usage (season, week), then rank
+    # paired_boost: negative = prefer (partner already scheduled at same time)
     # ratio_score: negative = prefer, positive = deprioritize
-    filtered.sort(key=lambda x: (x["has_violations"], x["ratio_score"], x["season"], x["week"], x["rank"], x["name"]))
+    filtered.sort(key=lambda x: (x["has_violations"], x["paired_boost"], x["ratio_score"], x["season"], x["week"], x["rank"], x["name"]))
 
     # Select players
     if typ.lower().startswith("einzel"):
@@ -655,6 +752,62 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
 
         filled_count += 1
         filled_slots.append({**slot_info, "players": players})
+
+        # Check if any of the players just scheduled are part of a paired group
+        # If yes, try to schedule their partner at the same time
+        time_match = re.search(r"(\d{2}:\d{2})", slot_info["Slot"])
+        slot_time = time_match.group(1) if time_match else "00:00"
+
+        for player in players:
+            for pair in PAIRED_PLAYERS:
+                if player in pair:
+                    # Find the partner
+                    partners = [p for p in pair if p != player]
+                    for partner in partners:
+                        # Check if partner is already scheduled on this day
+                        partner_on_day = df_result[
+                            (df_result["Datum_dt"].dt.date == slot_info["Datum"]) &
+                            (df_result["Spieler"].str.contains(fr"\b{re.escape(partner)}\b", regex=True))
+                        ]
+
+                        if partner_on_day.empty:
+                            # Partner not scheduled yet - try to find a slot at the same time
+                            for next_slot in empty_slots:
+                                if (next_slot["Datum"] == slot_info["Datum"] and
+                                    next_slot["Slot"] not in [s["Slot"] for s in filled_slots]):
+                                    # Check if this slot is at the same time
+                                    next_time_match = re.search(r"(\d{2}:\d{2})", next_slot["Slot"])
+                                    next_slot_time = next_time_match.group(1) if next_time_match else "00:00"
+
+                                    if next_slot_time == slot_time:
+                                        # Try to schedule the partner in this slot
+                                        next_players = select_players_for_slot(
+                                            df_result, next_slot, all_players, available_days, preferences, holidays
+                                        )
+
+                                        # Check if partner is in the selected players
+                                        if next_players and partner in next_players:
+                                            # Verify no violations
+                                            if only_legal:
+                                                has_violations = any(
+                                                    check_violations(p, next_slot["Tag"], next_slot_time, next_slot["Typ"],
+                                                                   df_result, next_slot["Datum"], available_days, preferences, holidays)
+                                                    for p in next_players
+                                                )
+                                                if not has_violations:
+                                                    # Schedule the partner's slot
+                                                    partner_row = pd.DataFrame([{
+                                                        "Datum": next_slot["Datum"].strftime("%Y-%m-%d"),
+                                                        "Tag": next_slot["Tag"],
+                                                        "Slot": next_slot["Slot"],
+                                                        "Typ": next_slot["Typ"],
+                                                        "Spieler": ", ".join(next_players),
+                                                    }])
+                                                    df_result = pd.concat([df_result, partner_row], ignore_index=True)
+                                                    df_result, _ = postprocess_plan(df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]])
+                                                    filled_count += 1
+                                                    filled_slots.append({**next_slot, "players": next_players})
+                                                    break
 
     return df_result, filled_slots, skipped_slots
 
