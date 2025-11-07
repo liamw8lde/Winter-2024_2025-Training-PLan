@@ -357,7 +357,8 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
         total_after = count_season(df_after, name)
         wed20_after = count_wed20(df_after, name)
         early_after = count_18_19(df_after, name)
-        if total_after > 0:
+        # Only enforce percentage rules after 5+ matches to avoid chicken-egg problem
+        if total_after >= 5:
             if wed20_after / total_after > 0.30:
                 violations.append(f"{name}: Anteil Mi 20:00 > 30%.")
             if early_after / total_after < 0.70:
@@ -611,31 +612,6 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
         season_count = int(df_plan["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum())
         rk = RANK.get(name, 999)
 
-        # Count singles and doubles for ratio balancing
-        player_matches = df_plan[df_plan["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True)]
-        singles_count = int(player_matches[player_matches["Typ"].str.contains("Einzel", case=False)].shape[0])
-        doubles_count = int(player_matches[player_matches["Typ"].str.contains("Doppel", case=False)].shape[0])
-        total_matches = singles_count + doubles_count
-
-        # Calculate ratio balance score for "keine Präferenz" players
-        # Target: 35% singles, 65% doubles
-        ratio_score = 0
-        pref = preferences.get(name, "keine Präferenz")
-        if pref == "keine Präferenz" and total_matches > 0:
-            current_singles_ratio = singles_count / total_matches
-            # If adding singles and below target (35%), prefer singles (negative score = higher priority)
-            # If adding doubles and above target singles, prefer doubles
-            if typ.lower().startswith("einzel"):
-                if current_singles_ratio < 0.35:
-                    ratio_score = -10  # Prefer this assignment
-                else:
-                    ratio_score = 10   # Deprioritize
-            else:  # Doppel
-                if current_singles_ratio > 0.35:
-                    ratio_score = -10  # Prefer this assignment
-                else:
-                    ratio_score = 10   # Deprioritize
-
         # Check if this player's paired partner was just scheduled at same time/date
         paired_boost = 0
         for pair in PAIRED_PLAYERS:
@@ -677,9 +653,6 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
             "violations": viol,
             "paired_boost": paired_boost,
             "has_violations": len(viol) > 0,
-            "ratio_score": ratio_score,
-            "singles_count": singles_count,
-            "doubles_count": doubles_count,
         })
 
     # Filter by type preference
@@ -692,10 +665,10 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
             continue
         filtered.append(c)
 
-    # Sort: legal first, then by paired boost (very high priority), then by ratio balance, then by usage (season, week), then rank
+    # Sort: legal first, then by paired boost (very high priority), then by usage (season, week), then rank
     # paired_boost: negative = prefer (partner already scheduled at same time)
-    # ratio_score: negative = prefer, positive = deprioritize
-    filtered.sort(key=lambda x: (x["has_violations"], x["paired_boost"], x["ratio_score"], x["season"], x["week"], x["rank"], x["name"]))
+    # Prioritize players with fewer matches for better balance
+    filtered.sort(key=lambda x: (x["has_violations"], x["paired_boost"], x["season"], x["week"], x["rank"], x["name"]))
 
     # Select players
     if typ.lower().startswith("einzel"):
