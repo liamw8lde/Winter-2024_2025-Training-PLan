@@ -506,8 +506,15 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
         # Simulate adding player
         y, w = week_of(datum)
         virtual = pd.DataFrame([{
-            "Tag": tag, "S_Time": slot_time, "Typ": typ, "Spieler": name,
-            "Jahr": y, "Woche": w
+            "Datum": datum.strftime("%Y-%m-%d"),
+            "Datum_dt": pd.Timestamp(datum),
+            "Tag": tag,
+            "Slot": slot_code,
+            "Typ": typ,
+            "Spieler": name,
+            "S_Time": slot_time,
+            "Jahr": y,
+            "Woche": w
         }])
         df_virtual = pd.concat([df_plan, virtual], ignore_index=True)
 
