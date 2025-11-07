@@ -503,6 +503,31 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
         season_count = int(df_plan["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True).sum())
         rk = RANK.get(name, 999)
 
+        # Count singles and doubles for ratio balancing
+        player_matches = df_plan[df_plan["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True)]
+        singles_count = int(player_matches[player_matches["Typ"].str.contains("Einzel", case=False)].shape[0])
+        doubles_count = int(player_matches[player_matches["Typ"].str.contains("Doppel", case=False)].shape[0])
+        total_matches = singles_count + doubles_count
+
+        # Calculate ratio balance score for "keine Präferenz" players
+        # Target: 35% singles, 65% doubles
+        ratio_score = 0
+        pref = preferences.get(name, "keine Präferenz")
+        if pref == "keine Präferenz" and total_matches > 0:
+            current_singles_ratio = singles_count / total_matches
+            # If adding singles and below target (35%), prefer singles (negative score = higher priority)
+            # If adding doubles and above target singles, prefer doubles
+            if typ.lower().startswith("einzel"):
+                if current_singles_ratio < 0.35:
+                    ratio_score = -10  # Prefer this assignment
+                else:
+                    ratio_score = 10   # Deprioritize
+            else:  # Doppel
+                if current_singles_ratio > 0.35:
+                    ratio_score = -10  # Prefer this assignment
+                else:
+                    ratio_score = 10   # Deprioritize
+
         # Simulate adding player
         y, w = week_of(datum)
         virtual = pd.DataFrame([{
@@ -527,6 +552,9 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
             "rank": rk,
             "violations": viol,
             "has_violations": len(viol) > 0,
+            "ratio_score": ratio_score,
+            "singles_count": singles_count,
+            "doubles_count": doubles_count,
         })
 
     # Filter by type preference
@@ -539,8 +567,9 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
             continue
         filtered.append(c)
 
-    # Sort: legal first, then by usage (season, week), then rank
-    filtered.sort(key=lambda x: (x["has_violations"], x["season"], x["week"], x["rank"], x["name"]))
+    # Sort: legal first, then by ratio balance, then by usage (season, week), then rank
+    # ratio_score: negative = prefer, positive = deprioritize
+    filtered.sort(key=lambda x: (x["has_violations"], x["ratio_score"], x["season"], x["week"], x["rank"], x["name"]))
 
     # Select players
     if typ.lower().startswith("einzel"):
@@ -1358,6 +1387,23 @@ with tab_player:
                                 if unique_weeks > 0:
                                     avg_per_week = len(player_matches) / unique_weeks
                                     st.metric("Ø pro Woche", f"{avg_per_week:.1f}")
+
+                        # Show ratio for "keine Präferenz" players
+                        pref = player_row.get("Preference", "keine Präferenz")
+                        if pref == "keine Präferenz" and len(player_matches) > 0:
+                            singles_ratio = (einzel_count / len(player_matches)) * 100
+                            doubles_ratio = (doppel_count / len(player_matches)) * 100
+
+                            st.markdown("---")
+                            st.write("**Match-Typ Verteilung** (Ziel: 35% Einzel / 65% Doppel)")
+
+                            col_r1, col_r2 = st.columns(2)
+                            with col_r1:
+                                ratio_status = "✅" if 30 <= singles_ratio <= 40 else "⚠️"
+                                st.metric(f"Einzel {ratio_status}", f"{singles_ratio:.1f}%")
+                            with col_r2:
+                                ratio_status = "✅" if 60 <= doubles_ratio <= 70 else "⚠️"
+                                st.metric(f"Doppel {ratio_status}", f"{doubles_ratio:.1f}%")
 
                         st.markdown("---")
 
