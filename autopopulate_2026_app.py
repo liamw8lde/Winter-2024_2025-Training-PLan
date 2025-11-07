@@ -82,6 +82,12 @@ SEASON_LIMITS = {
     "Torsten Bartel": 3,  # Max 3 matches for entire 2026 season
 }
 
+# Season match targets (player -> target number of matches)
+# Players below their target get priority boost
+SEASON_TARGETS = {
+    "Thomas Grueneberg": 11,  # "Würde gerne einmal pro Woche spielen!"
+}
+
 # ==================== DATA LOADING ====================
 @st.cache_data(show_spinner=False)
 def load_plan_csv(file_path):
@@ -628,6 +634,15 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
                         # Partner is scheduled at same time - give huge priority boost
                         paired_boost = -1000
 
+        # Check if this player has a target and is below it
+        target_boost = 0
+        if name in SEASON_TARGETS:
+            target = SEASON_TARGETS[name]
+            if season_count < target:
+                # Calculate how far below target (more below = higher boost)
+                deficit = target - season_count
+                target_boost = -100 * deficit  # Strong boost based on deficit
+
         # Simulate adding player
         y, w = week_of(datum)
         virtual = pd.DataFrame([{
@@ -652,6 +667,7 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
             "rank": rk,
             "violations": viol,
             "paired_boost": paired_boost,
+            "target_boost": target_boost,
             "has_violations": len(viol) > 0,
         })
 
@@ -665,10 +681,11 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
             continue
         filtered.append(c)
 
-    # Sort: legal first, then by paired boost (very high priority), then by usage (season, week), then rank
+    # Sort: legal first, then by paired boost, then by target boost, then by usage (season, week), then rank
     # paired_boost: negative = prefer (partner already scheduled at same time)
+    # target_boost: negative = prefer (player below their target match count)
     # Prioritize players with fewer matches for better balance
-    filtered.sort(key=lambda x: (x["has_violations"], x["paired_boost"], x["season"], x["week"], x["rank"], x["name"]))
+    filtered.sort(key=lambda x: (x["has_violations"], x["paired_boost"], x["target_boost"], x["season"], x["week"], x["rank"], x["name"]))
 
     # Select players
     if typ.lower().startswith("einzel"):
