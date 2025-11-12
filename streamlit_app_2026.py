@@ -71,6 +71,16 @@ def load_preferences_csv(file_path):
         st.error(f"Error loading preferences from {file_path}: {e}")
         return None
 
+@st.cache_data(show_spinner=False)
+def load_ranks_csv(file_path):
+    """Load player ranks CSV and return as dict"""
+    try:
+        df = pd.read_csv(file_path)
+        return dict(zip(df["Spieler"], df["Rank"]))
+    except Exception as e:
+        st.error(f"Error loading ranks from {file_path}: {e}")
+        return {}
+
 # ==================== GITHUB FUNCTIONS ====================
 def github_headers():
     token = st.secrets.get("GITHUB_TOKEN")
@@ -124,8 +134,8 @@ def github_put_file(csv_bytes, message, file_path):
     raise RuntimeError(f"GitHub PUT failed {r.status_code}: {r.text}")
 
 # ==================== RENDERING FUNCTIONS ====================
-def render_week(df: pd.DataFrame, year: int, week: int):
-    """Render a specific week's schedule"""
+def render_week(df: pd.DataFrame, year: int, week: int, ranks: dict):
+    """Render a specific week's schedule with ranks"""
     wk = df[(df["Jahr"] == year) & (df["Woche"] == week)].copy()
     if wk.empty:
         st.info("📭 Keine Einträge in dieser Woche.")
@@ -139,7 +149,35 @@ def render_week(df: pd.DataFrame, year: int, week: int):
         for _, r in day_df.iterrows():
             court_emoji = "🎾" if r["S_Court"] == "A" else "🏐"
             type_emoji = "👤" if r["Typ"] == "Einzel" else "👥"
-            st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*  \n  {r['Spieler']}")
+
+            # Parse players
+            players = [p.strip() for p in str(r['Spieler']).split(",")]
+
+            # Add rank info for singles
+            if r['Typ'] == "Einzel" and len(players) == 2:
+                rank1 = ranks.get(players[0], "?")
+                rank2 = ranks.get(players[1], "?")
+
+                # Calculate rank difference
+                if isinstance(rank1, (int, float)) and isinstance(rank2, (int, float)):
+                    diff = abs(rank1 - rank2)
+                    rank_info = f"  📊 Ranks: {players[0]} (R{rank1}) vs {players[1]} (R{rank2}) — Diff: {diff}"
+                else:
+                    rank_info = f"  📊 Ranks: {players[0]} (R{rank1}) vs {players[1]} (R{rank2})"
+
+                st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*  \n  {r['Spieler']}\n{rank_info}")
+            else:
+                # For doubles, show ranks but no difference
+                player_ranks = []
+                for p in players:
+                    rank = ranks.get(p, "?")
+                    player_ranks.append(f"{p} (R{rank})")
+
+                if len(player_ranks) > 0:
+                    rank_info = f"  📊 {', '.join(player_ranks)}"
+                    st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*  \n  {r['Spieler']}\n{rank_info}")
+                else:
+                    st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*  \n  {r['Spieler']}")
 
 # ==================== PASSWORD PROTECTION ====================
 def check_password():
@@ -167,6 +205,7 @@ st.markdown("**Trainingstermine Januar - April 2026**")
 with st.spinner("Lade 2026 Daten..."):
     df_plan, df_exp = load_plan_csv(PLAN_FILE)
     df_prefs = load_preferences_csv(PREFS_FILE)
+    player_ranks = load_ranks_csv(RANK_FILE)
 
 if df_plan is None:
     st.error(f"❌ Konnte {PLAN_FILE} nicht laden!")
@@ -174,7 +213,7 @@ if df_plan is None:
     st.stop()
 
 # Tabs
-tab1, tab2, tab3 = st.tabs(["📅 Wochenplan", "👤 Spieler-Matches", "📊 Statistiken"])
+tab1, tab2, tab3, tab4 = st.tabs(["📅 Wochenplan", "👤 Spieler-Matches", "🏆 Rankings", "📊 Statistiken"])
 
 # ==================== TAB 1: WOCHENPLAN ====================
 with tab1:
@@ -200,7 +239,7 @@ with tab1:
     if match:
         year = int(match.group(1))
         week = int(match.group(2))
-        render_week(df_plan, year, week)
+        render_week(df_plan, year, week, player_ranks)
 
     # Navigation buttons
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -271,8 +310,116 @@ with tab2:
     else:
         st.warning("⚠️ Keine Spieler gefunden.")
 
-# ==================== TAB 3: STATISTIKEN ====================
+# ==================== TAB 3: RANKINGS ====================
 with tab3:
+    st.header("🏆 Spieler Rankings")
+
+    if player_ranks:
+        # Create DataFrame from ranks
+        ranks_df = pd.DataFrame([
+            {"Spieler": player, "Rank": rank}
+            for player, rank in sorted(player_ranks.items(), key=lambda x: (x[1], x[0]))
+        ])
+
+        # Add rank labels
+        rank_labels = {
+            1: "🥇 Sehr stark",
+            2: "🥈 Stark",
+            3: "🥉 Gut",
+            4: "⭐ Mittel",
+            5: "⚡ Entwicklung",
+            6: "🌱 Einsteiger"
+        }
+
+        ranks_df["Level"] = ranks_df["Rank"].map(rank_labels)
+
+        # Summary stats
+        st.subheader("📊 Ranking Übersicht")
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Gesamt Spieler", len(ranks_df))
+        with col2:
+            st.metric("Durchschnitt Rank", f"{ranks_df['Rank'].mean():.1f}")
+        with col3:
+            rank1_count = (ranks_df["Rank"] == 1).sum()
+            st.metric("Rank 1 (Stärkste)", rank1_count)
+        with col4:
+            rank6_count = (ranks_df["Rank"] == 6).sum()
+            st.metric("Rank 6 (Einsteiger)", rank6_count)
+
+        # Distribution chart
+        st.subheader("📈 Rank Verteilung")
+        rank_distribution = ranks_df["Rank"].value_counts().sort_index()
+        chart_df = pd.DataFrame({
+            "Rank": [f"Rank {r}" for r in rank_distribution.index],
+            "Anzahl": rank_distribution.values
+        })
+        st.bar_chart(chart_df.set_index("Rank"))
+
+        # Full ranking list
+        st.subheader("📋 Komplette Rangliste")
+
+        # Group by rank
+        for rank in sorted(ranks_df["Rank"].unique()):
+            rank_players = ranks_df[ranks_df["Rank"] == rank]
+            with st.expander(f"{rank_labels.get(rank, f'Rank {rank}')} — {len(rank_players)} Spieler", expanded=(rank <= 2)):
+                players_list = sorted(rank_players["Spieler"].tolist())
+                st.write(", ".join(players_list))
+
+        # Searchable table
+        st.subheader("🔍 Spieler suchen")
+        search = st.text_input("Spielername eingeben:", "")
+
+        if search:
+            filtered = ranks_df[ranks_df["Spieler"].str.contains(search, case=False, na=False)]
+            if not filtered.empty:
+                st.dataframe(
+                    filtered[["Spieler", "Rank", "Level"]],
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info(f"Kein Spieler gefunden mit '{search}'")
+        else:
+            st.dataframe(
+                ranks_df[["Spieler", "Rank", "Level"]],
+                use_container_width=True,
+                hide_index=True,
+                height=400
+            )
+
+        # Download option
+        csv_bytes = ranks_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "📥 Rankings als CSV herunterladen",
+            data=csv_bytes,
+            file_name="Player_Rankings_2026.csv",
+            mime="text/csv"
+        )
+    else:
+        st.warning("⚠️ Keine Ranking-Daten verfügbar.")
+
+    # Ranking explanation
+    with st.expander("ℹ️ Ranking System Erklärung"):
+        st.markdown("""
+        ### Wie funktioniert das Ranking?
+
+        **Rank 1** 🥇 - Sehr starke Spieler (stärkste Spieler)
+        **Rank 2** 🥈 - Starke Spieler
+        **Rank 3** 🥉 - Gute Spieler
+        **Rank 4** ⭐ - Mittleres Niveau
+        **Rank 5** ⚡ - Entwicklungsspieler
+        **Rank 6** 🌱 - Einsteiger
+
+        **Einzel:** Rank-Differenz zwischen 2 Spielern ≤ 2
+        **Doppel:** Rank-Differenz zwischen stärkstem und schwächstem Spieler ≤ 3
+
+        Dies sorgt für ausgeglichene und faire Matches!
+        """)
+
+# ==================== TAB 4: STATISTIKEN ====================
+with tab4:
     st.header("Saison-Statistiken")
 
     if df_exp is not None and not df_exp.empty:
