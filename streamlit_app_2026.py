@@ -161,9 +161,9 @@ def render_week(df: pd.DataFrame, year: int, week: int, ranks: dict):
                 # Calculate rank difference
                 if isinstance(rank1, (int, float)) and isinstance(rank2, (int, float)):
                     diff = abs(rank1 - rank2)
-                    rank_info = f"  📊 Ranks: {players[0]} (R{rank1}) vs {players[1]} (R{rank2}) — Diff: {diff}"
+                    rank_info = f"  📊 Ranks: {players[0]} ({rank1}) vs {players[1]} ({rank2}) — Diff: {diff}"
                 else:
-                    rank_info = f"  📊 Ranks: {players[0]} (R{rank1}) vs {players[1]} (R{rank2})"
+                    rank_info = f"  📊 Ranks: {players[0]} ({rank1}) vs {players[1]} ({rank2})"
 
                 st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*  \n  {r['Spieler']}\n{rank_info}")
             else:
@@ -171,7 +171,7 @@ def render_week(df: pd.DataFrame, year: int, week: int, ranks: dict):
                 player_ranks = []
                 for p in players:
                     rank = ranks.get(p, "?")
-                    player_ranks.append(f"{p} (R{rank})")
+                    player_ranks.append(f"{p} ({rank})")
 
                 if len(player_ranks) > 0:
                     rank_info = f"  📊 {', '.join(player_ranks)}"
@@ -417,6 +417,71 @@ with tab3:
 
         Dies sorgt für ausgeglichene und faire Matches!
         """)
+
+    # Scheduling rules
+    with st.expander("⚙️ Automatische Planungs-Regeln (aus autopopulate_2026_app.py)"):
+        st.markdown("""
+        ### 📋 Scheduling Constraints & Rules
+
+        Der Trainingsplan wird automatisch mit folgenden Regeln erstellt:
+
+        #### 🎯 Grundlegende Constraints
+        - **Max 1 Match pro Tag** - Spieler können nicht mehrmals am gleichen Tag spielen
+        - **Max 1 Match pro Woche** - Spieler spielen maximal einmal pro Woche
+        - **Kein Zeitkonflikt** - Spieler können nicht gleichzeitig auf verschiedenen Plätzen sein
+
+        #### 🏆 Ranking-basierte Kompatibilität
+        - **Einzel:** Rank-Differenz ≤ 2 (z.B. Rank 1 kann mit Rank 1, 2, 3 spielen)
+        - **Doppel:** Rank-Differenz zwischen stärkstem und schwächstem ≤ 3
+        - **Singles Variety:** Gleiche 2 Spieler maximal 3x im Einzel gegeneinander (MAX_SINGLES_REPEATS = 3)
+
+        #### 👥 Spieler-spezifische Regeln
+        **Paired Players (müssen zur gleichen Zeit spielen):**
+        - Lena Meiss & Kerstin Baarck (wohnen zusammen, fahren gemeinsam)
+
+        **Partner Präferenzen (Doppel):**
+        - Bjoern Junker + Martin Lange (Fahrgemeinschaft aus Schönkirchen)
+
+        **Frauen Einzel-Verbot:**
+        - Anke Ihde, Lena Meiss, Martina Schmidt, Kerstin Baarck
+
+        **Zeit-geschützte Spieler:**
+        - Patrick Buehrsch: nur 18:00
+        - Frank Petermann: nur 19:00 oder 20:00
+        - Matthias Duddek: nur 18:00 oder 19:00
+        - Dirk Kistner: nur Mo/Mi/Do; Mittwoch nur 19:00
+        - Arndt Stueber: nur Mittwoch 19:00
+        - Jens Hafner: nur Mittwoch 19:00
+        - Thomas Grueneberg: max 30% Mittwoch 20:00, min 70% um 18/19 Uhr
+
+        #### 📊 Match-Limits
+        **Monatliche Limits:**
+        - Peter Plaehn: max 3 Matches/Monat
+
+        **Saison-Limits:**
+        - Torsten Bartel: max 3 Matches/Saison
+
+        **Saison-Targets (Prioritäts-Boost):**
+        - Thomas Grueneberg: Ziel 11 Matches ("Würde gerne einmal pro Woche spielen!")
+
+        #### 📅 Weitere Constraints
+        - **Urlaubs-/Blackout-Perioden** aus CSV (Spieler_Preferences_2026.csv)
+        - **Verfügbare Wochentage** pro Spieler (AvailableDays in Preferences)
+        - **Spielart-Präferenzen** (nur Einzel / nur Doppel / keine Präferenz)
+
+        #### ⚡ Priorisierungs-System
+        Der Algorithmus verwendet Priority Boosting:
+        - **Target Boost:** -100 × (Ziel - aktuelle Matches) für Spieler unter ihrem Ziel
+        - **Paired Boost:** -50 wenn Partner verfügbar ist
+        - **Ratio Balancing:** Spieler mit weniger Matches bekommen höhere Priorität
+        - **Niedrigere Werte = höhere Priorität** (mehr wahrscheinlich ausgewählt zu werden)
+
+        ---
+
+        **Datei:** `autopopulate_2026_app.py` (Zeilen 60-92, 331-438)
+        **Quelle:** Player_Ranks_2026.csv, Spieler_Preferences_2026.csv
+        """)
+
 
 # ==================== TAB 4: STATISTIKEN ====================
 with tab4:
