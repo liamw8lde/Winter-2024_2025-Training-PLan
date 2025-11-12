@@ -1,7 +1,6 @@
 Spieler,ValidFrom,ValidTo,AvailableDays,Preference,BlockedRanges,BlockedDays,Notes,Timestamp
 Bernd Robioneck,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-04,,,2025-10-27T19:40:11Z
 Carsten Gambal,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-01,,,2025-10-27T19:40:11Z
-Frank Koller,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-05,,,2025-10-27T19:40:11Z
 Frank Petermann,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
 Gunnar Brix,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
 Markus Muench,2026-01-01,2026-04-26,Mittwoch;Sonntag,keine Präferenz,2026-01-01→2026-01-04,,,2025-10-27T19:40:11Z

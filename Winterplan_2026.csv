@@ -4,7 +4,7 @@ Datum,Tag,Slot,Typ,Spieler,Datum_dt,Jahr,Woche,S_Art,S_Time,S_Dur,S_Court,Spiele
 2026-01-07,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Patrick Buehrsch",2026-01-07,2026,2,E,18:00,60,A,"['Thomas Grueneberg', 'Patrick Buehrsch']"
 2026-01-07,Mittwoch,E19:00-60 PLA,Einzel,"Jens Krause, Joerg Peters",2026-01-07,2026,2,E,19:00,60,A,"['Jens Krause', 'Joerg Peters']"
 2026-01-07,Mittwoch,E19:00-60 PLB,Einzel,"Juergen Hansen, Liam Wilde",2026-01-07,2026,2,E,19:00,60,B,"['Juergen Hansen', 'Liam Wilde']"
-2026-01-07,Mittwoch,D20:00-90 PLA,Doppel,"Manfred Grell, Oliver Boess, Bernd Robioneck, Frank Koller",2026-01-07,2026,2,D,20:00,90,A,"['Manfred Grell', 'Oliver Boess', 'Bernd Robioneck', 'Frank Koller']"
+2026-01-07,Mittwoch,D20:00-90 PLA,Doppel,,2026-01-07,2026,2,D,20:00,90,A,[]
 2026-01-07,Mittwoch,D20:00-90 PLB,Doppel,"Heiko Thomsen, Jan Pappenheim, Markus Muench, Tobias Kahl",2026-01-07,2026,2,D,20:00,90,B,"['Heiko Thomsen', 'Jan Pappenheim', 'Markus Muench', 'Tobias Kahl']"
 2026-01-08,Donnerstag,E20:00-90 PLA,Einzel,"Thomas Bretschneider, Lorenz Kramp",2026-01-08,2026,2,E,20:00,90,A,"['Thomas Bretschneider', 'Lorenz Kramp']"
 2026-01-08,Donnerstag,E20:00-90 PLB,Einzel,"Dirk Kistner, Karsten Usinger",2026-01-08,2026,2,E,20:00,90,B,"['Dirk Kistner', 'Karsten Usinger']"
@@ -21,7 +21,7 @@ Datum,Tag,Slot,Typ,Spieler,Datum_dt,Jahr,Woche,S_Art,S_Time,S_Dur,S_Court,Spiele
 2026-01-19,Montag,D20:00-120 PLB,Doppel,"Mats Lange, Andreas Dank, Jan Pappenheim, Karsten Usinger",2026-01-19,2026,4,D,20:00,120,B,"['Mats Lange', 'Andreas Dank', 'Jan Pappenheim', 'Karsten Usinger']"
 2026-01-21,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Patrick Buehrsch",2026-01-21,2026,4,E,18:00,60,A,"['Thomas Grueneberg', 'Patrick Buehrsch']"
 2026-01-21,Mittwoch,E19:00-60 PLA,Einzel,"Matthias Duddek, Arndt Stüber",2026-01-21,2026,4,E,19:00,60,A,"['Matthias Duddek', 'Arndt Stüber']"
-2026-01-21,Mittwoch,E19:00-60 PLB,Einzel,"Bernd Robioneck, Frank Koller",2026-01-21,2026,4,E,19:00,60,B,"['Bernd Robioneck', 'Frank Koller']"
+2026-01-21,Mittwoch,E19:00-60 PLB,Einzel,,2026-01-21,2026,4,E,19:00,60,B,[]
 2026-01-21,Mittwoch,D20:00-90 PLA,Doppel,"Heiko Thomsen, Markus Muench, Tobias Kahl, Torsten Bartel",2026-01-21,2026,4,D,20:00,90,A,"['Heiko Thomsen', 'Markus Muench', 'Tobias Kahl', 'Torsten Bartel']"
 2026-01-21,Mittwoch,D20:00-90 PLB,Doppel,"Anke Ihde, Gunnar Brix, Martina Schmidt, Michael Bock",2026-01-21,2026,4,D,20:00,90,B,"['Anke Ihde', 'Gunnar Brix', 'Martina Schmidt', 'Michael Bock']"
 2026-01-22,Donnerstag,E20:00-90 PLA,Einzel,"Dirk Kistner, Michael Rabehl",2026-01-22,2026,4,E,20:00,90,A,"['Dirk Kistner', 'Michael Rabehl']"
@@ -31,7 +31,7 @@ Datum,Tag,Slot,Typ,Spieler,Datum_dt,Jahr,Woche,S_Art,S_Time,S_Dur,S_Court,Spiele
 2026-01-28,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Lorenz Kramp",2026-01-28,2026,5,E,18:00,60,A,"['Thomas Grueneberg', 'Lorenz Kramp']"
 2026-01-28,Mittwoch,E19:00-60 PLA,Einzel,"Ralf Colditz, Jens Hafner",2026-01-28,2026,5,E,19:00,60,A,"['Ralf Colditz', 'Jens Hafner']"
 2026-01-28,Mittwoch,E19:00-60 PLB,Einzel,"Jens Krause, Joerg Peters",2026-01-28,2026,5,E,19:00,60,B,"['Jens Krause', 'Joerg Peters']"
-2026-01-28,Mittwoch,D20:00-90 PLA,Doppel,"Wolfgang Aleksik, Oliver Boess, Bernd Robioneck, Frank Koller",2026-01-28,2026,5,D,20:00,90,A,"['Wolfgang Aleksik', 'Oliver Boess', 'Bernd Robioneck', 'Frank Koller']"
+2026-01-28,Mittwoch,D20:00-90 PLA,Doppel,,2026-01-28,2026,5,D,20:00,90,A,[]
 2026-01-28,Mittwoch,D20:00-90 PLB,Doppel,"Juergen Hansen, Heiko Thomsen, Jan Pappenheim, Markus Muench",2026-01-28,2026,5,D,20:00,90,B,"['Juergen Hansen', 'Heiko Thomsen', 'Jan Pappenheim', 'Markus Muench']"
 2026-01-29,Donnerstag,E20:00-90 PLA,Einzel,"Liam Wilde, Thomas Bretschneider",2026-01-29,2026,5,E,20:00,90,A,"['Liam Wilde', 'Thomas Bretschneider']"
 2026-01-29,Donnerstag,E20:00-90 PLB,Einzel,"Dirk Kistner, Karsten Usinger",2026-01-29,2026,5,E,20:00,90,B,"['Dirk Kistner', 'Karsten Usinger']"
@@ -48,7 +48,7 @@ Datum,Tag,Slot,Typ,Spieler,Datum_dt,Jahr,Woche,S_Art,S_Time,S_Dur,S_Court,Spiele
 2026-02-09,Montag,D20:00-120 PLB,Doppel,"Anke Ihde, Mats Lange, Andreas Dank, Karsten Usinger",2026-02-09,2026,7,D,20:00,120,B,"['Anke Ihde', 'Mats Lange', 'Andreas Dank', 'Karsten Usinger']"
 2026-02-11,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Patrick Buehrsch",2026-02-11,2026,7,E,18:00,60,A,"['Thomas Grueneberg', 'Patrick Buehrsch']"
 2026-02-11,Mittwoch,E19:00-60 PLA,Einzel,"Manfred Grell, Kai Schroeder",2026-02-11,2026,7,E,19:00,60,A,"['Manfred Grell', 'Kai Schroeder']"
-2026-02-11,Mittwoch,E19:00-60 PLB,Einzel,"Jens Hafner, Frank Koller",2026-02-11,2026,7,E,19:00,60,B,"['Jens Hafner', 'Frank Koller']"
+2026-02-11,Mittwoch,E19:00-60 PLB,Einzel,,2026-02-11,2026,7,E,19:00,60,B,[]
 2026-02-11,Mittwoch,D20:00-90 PLA,Doppel,"Wolfgang Aleksik, Heiko Thomsen, Markus Muench, Tobias Kahl",2026-02-11,2026,7,D,20:00,90,A,"['Wolfgang Aleksik', 'Heiko Thomsen', 'Markus Muench', 'Tobias Kahl']"
 2026-02-11,Mittwoch,D20:00-90 PLB,Doppel,"Gunnar Brix, Martina Schmidt, Michael Bock, Bernd Sotzek",2026-02-11,2026,7,D,20:00,90,B,"['Gunnar Brix', 'Martina Schmidt', 'Michael Bock', 'Bernd Sotzek']"
 2026-02-12,Donnerstag,E20:00-90 PLA,Einzel,"Thomas Bretschneider, Lars Staubermann",2026-02-12,2026,7,E,20:00,90,A,"['Thomas Bretschneider', 'Lars Staubermann']"
@@ -58,7 +58,7 @@ Datum,Tag,Slot,Typ,Spieler,Datum_dt,Jahr,Woche,S_Art,S_Time,S_Dur,S_Court,Spiele
 2026-02-18,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Manfred Grell",2026-02-18,2026,8,E,18:00,60,A,"['Thomas Grueneberg', 'Manfred Grell']"
 2026-02-18,Mittwoch,E19:00-60 PLA,Einzel,"Matthias Duddek, Arndt Stüber",2026-02-18,2026,8,E,19:00,60,A,"['Matthias Duddek', 'Arndt Stüber']"
 2026-02-18,Mittwoch,E19:00-60 PLB,Einzel,"Kai Schroeder, Lorenz Kramp",2026-02-18,2026,8,E,19:00,60,B,"['Kai Schroeder', 'Lorenz Kramp']"
-2026-02-18,Mittwoch,D20:00-90 PLA,Doppel,"Wolfgang Aleksik, Oliver Boess, Bernd Robioneck, Frank Koller",2026-02-18,2026,8,D,20:00,90,A,"['Wolfgang Aleksik', 'Oliver Boess', 'Bernd Robioneck', 'Frank Koller']"
+2026-02-18,Mittwoch,D20:00-90 PLA,Doppel,,2026-02-18,2026,8,D,20:00,90,A,[]
 2026-02-18,Mittwoch,D20:00-90 PLB,Doppel,"Jens Krause, Joerg Peters, Juergen Hansen, Heiko Thomsen",2026-02-18,2026,8,D,20:00,90,B,"['Jens Krause', 'Joerg Peters', 'Juergen Hansen', 'Heiko Thomsen']"
 2026-02-19,Donnerstag,E20:00-90 PLA,Einzel,"Sebastian Braune, Andreas Dank",2026-02-19,2026,8,E,20:00,90,A,"['Sebastian Braune', 'Andreas Dank']"
 2026-02-19,Donnerstag,E20:00-90 PLB,Einzel,"Liam Wilde, Thomas Bretschneider",2026-02-19,2026,8,E,20:00,90,B,"['Liam Wilde', 'Thomas Bretschneider']"
@@ -76,7 +76,7 @@ Datum,Tag,Slot,Typ,Spieler,Datum_dt,Jahr,Woche,S_Art,S_Time,S_Dur,S_Court,Spiele
 2026-03-04,Mittwoch,E18:00-60 PLA,Einzel,"Thomas Grueneberg, Kai Schroeder",2026-03-04,2026,10,E,18:00,60,A,"['Thomas Grueneberg', 'Kai Schroeder']"
 2026-03-04,Mittwoch,E19:00-60 PLA,Einzel,"Jens Hafner, Arndt Stüber",2026-03-04,2026,10,E,19:00,60,A,"['Jens Hafner', 'Arndt Stüber']"
 2026-03-04,Mittwoch,E19:00-60 PLB,Einzel,"Liam Wilde, Matthias Duddek",2026-03-04,2026,10,E,19:00,60,B,"['Liam Wilde', 'Matthias Duddek']"
-2026-03-04,Mittwoch,D20:00-90 PLA,Doppel,"Wolfgang Aleksik, Bernd Robioneck, Frank Koller, Heiko Thomsen",2026-03-04,2026,10,D,20:00,90,A,"['Wolfgang Aleksik', 'Bernd Robioneck', 'Frank Koller', 'Heiko Thomsen']"
+2026-03-04,Mittwoch,D20:00-90 PLA,Doppel,,2026-03-04,2026,10,D,20:00,90,A,[]
 2026-03-04,Mittwoch,D20:00-90 PLB,Doppel,"Markus Muench, Tobias Kahl, Anke Ihde, Gunnar Brix",2026-03-04,2026,10,D,20:00,90,B,"['Markus Muench', 'Tobias Kahl', 'Anke Ihde', 'Gunnar Brix']"
 2026-03-05,Donnerstag,E20:00-90 PLA,Einzel,"Thomas Bretschneider, Lorenz Kramp",2026-03-05,2026,10,E,20:00,90,A,"['Thomas Bretschneider', 'Lorenz Kramp']"
 2026-03-05,Donnerstag,E20:00-90 PLB,Einzel,"Dirk Kistner, Michael Rabehl",2026-03-05,2026,10,E,20:00,90,B,"['Dirk Kistner', 'Michael Rabehl']"
@@ -86,7 +86,7 @@ Datum,Tag,Slot,Typ,Spieler,Datum_dt,Jahr,Woche,S_Art,S_Time,S_Dur,S_Court,Spiele
 2026-03-11,Mittwoch,E19:00-60 PLA,Einzel,"Kai Schroeder, Jens Hafner",2026-03-11,2026,11,E,19:00,60,A,"['Kai Schroeder', 'Jens Hafner']"
 2026-03-11,Mittwoch,E19:00-60 PLB,Einzel,"Jens Krause, Joerg Peters",2026-03-11,2026,11,E,19:00,60,B,"['Jens Krause', 'Joerg Peters']"
 2026-03-11,Mittwoch,D20:00-90 PLA,Doppel,"Juergen Hansen, Bernd Sotzek, Oliver Boess, Bernd Robioneck",2026-03-11,2026,11,D,20:00,90,A,"['Juergen Hansen', 'Bernd Sotzek', 'Oliver Boess', 'Bernd Robioneck']"
-2026-03-11,Mittwoch,D20:00-90 PLB,Doppel,"Carsten Gambal, Frank Koller, Heiko Thomsen, Andreas Dank",2026-03-11,2026,11,D,20:00,90,B,"['Carsten Gambal', 'Frank Koller', 'Heiko Thomsen', 'Andreas Dank']"
+2026-03-11,Mittwoch,D20:00-90 PLB,Doppel,,2026-03-11,2026,11,D,20:00,90,B,[]
 2026-03-12,Donnerstag,E20:00-90 PLA,Einzel,"Lars Staubermann, Liam Wilde",2026-03-12,2026,11,E,20:00,90,A,"['Lars Staubermann', 'Liam Wilde']"
 2026-03-12,Donnerstag,E20:00-90 PLB,Einzel,"Dirk Kistner, Jan Pappenheim",2026-03-12,2026,11,E,20:00,90,B,"['Dirk Kistner', 'Jan Pappenheim']"
 2026-03-16,Montag,D20:00-120 PLA,Doppel,"Bjoern Junker, Martin Lange, Frank Petermann, Lars Staubermann",2026-03-16,2026,12,D,20:00,120,A,"['Bjoern Junker', 'Martin Lange', 'Frank Petermann', 'Lars Staubermann']"
@@ -101,7 +101,7 @@ Datum,Tag,Slot,Typ,Spieler,Datum_dt,Jahr,Woche,S_Art,S_Time,S_Dur,S_Court,Spiele
 2026-03-23,Montag,D20:00-120 PLA,Doppel,"Bjoern Junker, Martin Lange, Carsten Gambal, Frank Petermann",2026-03-23,2026,13,D,20:00,120,A,"['Bjoern Junker', 'Martin Lange', 'Carsten Gambal', 'Frank Petermann']"
 2026-03-23,Montag,D20:00-120 PLB,Doppel,"Mohamad Albadry, Mats Lange, Sebastian Braune, Andreas Dank",2026-03-23,2026,13,D,20:00,120,B,"['Mohamad Albadry', 'Mats Lange', 'Sebastian Braune', 'Andreas Dank']"
 2026-03-25,Mittwoch,E18:00-60 PLA,Einzel,"Patrick Buehrsch, Liam Wilde",2026-03-25,2026,13,E,18:00,60,A,"['Patrick Buehrsch', 'Liam Wilde']"
-2026-03-25,Mittwoch,E19:00-60 PLA,Einzel,"Jens Hafner, Frank Koller",2026-03-25,2026,13,E,19:00,60,A,"['Jens Hafner', 'Frank Koller']"
+2026-03-25,Mittwoch,E19:00-60 PLA,Einzel,,2026-03-25,2026,13,E,19:00,60,A,[]
 2026-03-25,Mittwoch,E19:00-60 PLB,Einzel,"Manfred Grell, Matthias Duddek",2026-03-25,2026,13,E,19:00,60,B,"['Manfred Grell', 'Matthias Duddek']"
 2026-03-25,Mittwoch,D20:00-90 PLA,Doppel,"Wolfgang Aleksik, Heiko Thomsen, Jan Pappenheim, Markus Muench",2026-03-25,2026,13,D,20:00,90,A,"['Wolfgang Aleksik', 'Heiko Thomsen', 'Jan Pappenheim', 'Markus Muench']"
 2026-03-25,Mittwoch,D20:00-90 PLB,Doppel,"Anke Ihde, Gunnar Brix, Martina Schmidt, Michael Bock",2026-03-25,2026,13,D,20:00,90,B,"['Anke Ihde', 'Gunnar Brix', 'Martina Schmidt', 'Michael Bock']"
@@ -112,7 +112,7 @@ Datum,Tag,Slot,Typ,Spieler,Datum_dt,Jahr,Woche,S_Art,S_Time,S_Dur,S_Court,Spiele
 2026-04-01,Mittwoch,E18:00-60 PLA,Einzel,"Patrick Buehrsch, Jens Krause",2026-04-01,2026,14,E,18:00,60,A,"['Patrick Buehrsch', 'Jens Krause']"
 2026-04-01,Mittwoch,E19:00-60 PLA,Einzel,"Kai Schroeder, Lorenz Kramp",2026-04-01,2026,14,E,19:00,60,A,"['Kai Schroeder', 'Lorenz Kramp']"
 2026-04-01,Mittwoch,E19:00-60 PLB,Einzel,"Jens Hafner, Bernd Robioneck",2026-04-01,2026,14,E,19:00,60,B,"['Jens Hafner', 'Bernd Robioneck']"
-2026-04-01,Mittwoch,D20:00-90 PLA,Doppel,"Wolfgang Aleksik, Manfred Grell, Frank Koller, Heiko Thomsen",2026-04-01,2026,14,D,20:00,90,A,"['Wolfgang Aleksik', 'Manfred Grell', 'Frank Koller', 'Heiko Thomsen']"
+2026-04-01,Mittwoch,D20:00-90 PLA,Doppel,,2026-04-01,2026,14,D,20:00,90,A,[]
 2026-04-01,Mittwoch,D20:00-90 PLB,Doppel,"Joerg Peters, Juergen Hansen, Andreas Dank, Jan Pappenheim",2026-04-01,2026,14,D,20:00,90,B,"['Joerg Peters', 'Juergen Hansen', 'Andreas Dank', 'Jan Pappenheim']"
 2026-04-02,Donnerstag,E20:00-90 PLA,Einzel,"Liam Wilde, Frank Petermann",2026-04-02,2026,14,E,20:00,90,A,"['Liam Wilde', 'Frank Petermann']"
 2026-04-02,Donnerstag,E20:00-90 PLB,Einzel,"Thomas Bretschneider, Oliver Boess",2026-04-02,2026,14,E,20:00,90,B,"['Thomas Bretschneider', 'Oliver Boess']"
@@ -124,7 +124,7 @@ Datum,Tag,Slot,Typ,Spieler,Datum_dt,Jahr,Woche,S_Art,S_Time,S_Dur,S_Court,Spiele
 2026-04-08,Mittwoch,D20:00-90 PLA,Doppel,"Anke Ihde, Gunnar Brix, Martina Schmidt, Michael Bock",2026-04-08,2026,15,D,20:00,90,A,"['Anke Ihde', 'Gunnar Brix', 'Martina Schmidt', 'Michael Bock']"
 2026-04-08,Mittwoch,D20:00-90 PLB,Doppel,"Jens Krause, Joerg Peters, Juergen Hansen, Manfred Grell",2026-04-08,2026,15,D,20:00,90,B,"['Jens Krause', 'Joerg Peters', 'Juergen Hansen', 'Manfred Grell']"
 2026-04-09,Donnerstag,E20:00-90 PLA,Einzel,"Michael Rabehl, Bernd Robioneck",2026-04-09,2026,15,E,20:00,90,A,"['Michael Rabehl', 'Bernd Robioneck']"
-2026-04-09,Donnerstag,E20:00-90 PLB,Einzel,"Sebastian Braune, Frank Koller",2026-04-09,2026,15,E,20:00,90,B,"['Sebastian Braune', 'Frank Koller']"
+2026-04-09,Donnerstag,E20:00-90 PLB,Einzel,,2026-04-09,2026,15,E,20:00,90,B,[]
 2026-04-13,Montag,D20:00-120 PLA,Doppel,"Bjoern Junker, Martin Lange, Peter Plaehn, Lars Staubermann",2026-04-13,2026,16,D,20:00,120,A,"['Bjoern Junker', 'Martin Lange', 'Peter Plaehn', 'Lars Staubermann']"
 2026-04-13,Montag,D20:00-120 PLB,Doppel,"Mohamad Albadry, Tobias Kahl, Mats Lange, Jan Pappenheim",2026-04-13,2026,16,D,20:00,120,B,"['Mohamad Albadry', 'Tobias Kahl', 'Mats Lange', 'Jan Pappenheim']"
 2026-04-15,Mittwoch,E18:00-60 PLA,Einzel,"Patrick Buehrsch, Liam Wilde",2026-04-15,2026,16,E,18:00,60,A,"['Patrick Buehrsch', 'Liam Wilde']"
@@ -140,6 +140,6 @@ Datum,Tag,Slot,Typ,Spieler,Datum_dt,Jahr,Woche,S_Art,S_Time,S_Dur,S_Court,Spiele
 2026-04-22,Mittwoch,E19:00-60 PLA,Einzel,"Arndt Stüber, Kai Schroeder",2026-04-22,2026,17,E,19:00,60,A,"['Arndt Stüber', 'Kai Schroeder']"
 2026-04-22,Mittwoch,E19:00-60 PLB,Einzel,"Jens Hafner, Bernd Robioneck",2026-04-22,2026,17,E,19:00,60,B,"['Jens Hafner', 'Bernd Robioneck']"
 2026-04-22,Mittwoch,D20:00-90 PLA,Doppel,"Joerg Peters, Juergen Hansen, Oliver Boess, Carsten Gambal",2026-04-22,2026,17,D,20:00,90,A,"['Joerg Peters', 'Juergen Hansen', 'Oliver Boess', 'Carsten Gambal']"
-2026-04-22,Mittwoch,D20:00-90 PLB,Doppel,"Frank Koller, Heiko Thomsen, Andreas Dank, Jan Pappenheim",2026-04-22,2026,17,D,20:00,90,B,"['Frank Koller', 'Heiko Thomsen', 'Andreas Dank', 'Jan Pappenheim']"
+2026-04-22,Mittwoch,D20:00-90 PLB,Doppel,,2026-04-22,2026,17,D,20:00,90,B,[]
 2026-04-23,Donnerstag,E20:00-90 PLA,Einzel,"Michael Rabehl, Gunnar Brix",2026-04-23,2026,17,E,20:00,90,A,"['Michael Rabehl', 'Gunnar Brix']"
 2026-04-23,Donnerstag,E20:00-90 PLB,Einzel,"Liam Wilde, Thomas Grueneberg",2026-04-23,2026,17,E,20:00,90,B,"['Liam Wilde', 'Thomas Grueneberg']"
