@@ -69,16 +69,15 @@ def generate_player_calendar():
 
     print(f"Found {len(all_players)} players and {len(all_dates)} dates")
 
-    # Create a matrix: players x dates
+    # Create a matrix: dates x players (dates in rows, players in columns)
     calendar_data = []
 
-    for player in all_players:
-        player_row = {"Spieler": player}
+    for date_dt in all_dates:
+        date_str = pd.to_datetime(date_dt).strftime("%d.%m.%Y")
+        date_row = {"Datum": date_str}
 
-        # For each date, find if player has a match
-        for date_dt in all_dates:
-            date_str = pd.to_datetime(date_dt).strftime("%d.%m.%Y")
-
+        # For each player, find if they have a match on this date
+        for player in all_players:
             # Find matches for this player on this date
             matches = df_exp[
                 (df_exp["Spieler_list"] == player) &
@@ -93,9 +92,9 @@ def generate_player_calendar():
             else:
                 cell_value = ""
 
-            player_row[date_str] = cell_value
+            date_row[player] = cell_value
 
-        calendar_data.append(player_row)
+        calendar_data.append(date_row)
 
     # Create DataFrame
     df_calendar = pd.DataFrame(calendar_data)
@@ -155,7 +154,7 @@ def generate_player_calendar():
             cell.alignment = center_alignment
             cell.border = thin_border
 
-            # First column (player names) - left align and bold
+            # First column (dates) - left align and bold
             if col_idx == 1:
                 cell.alignment = Alignment(horizontal="left", vertical="center")
                 cell.font = Font(bold=True, size=10)
@@ -177,10 +176,10 @@ def generate_player_calendar():
                     cell.font = font_b
 
     # Set column widths
-    ws.column_dimensions['A'].width = 20  # Player names
+    ws.column_dimensions['A'].width = 15  # Dates
     for col_idx in range(2, ws.max_column + 1):
         col_letter = ws.cell(row=1, column=col_idx).column_letter
-        ws.column_dimensions[col_letter].width = 12  # Date columns
+        ws.column_dimensions[col_letter].width = 12  # Player columns
 
     # Freeze first row and first column
     ws.freeze_panes = "B2"

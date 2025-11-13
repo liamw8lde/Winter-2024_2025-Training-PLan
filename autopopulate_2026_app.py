@@ -990,7 +990,7 @@ def check_plan_violations(df_plan, available_days, preferences, holidays):
 
 # ==================== SPREADSHEET VIEW FUNCTION ====================
 def create_player_calendar_view(df_plan):
-    """Create a pivot table with players as rows and dates as columns
+    """Create a pivot table with dates as rows and players as columns
     Format: E/D Time Court (e.g., 'E 19:00 A' or 'D 20:00 B')
     """
     if df_plan.empty or len(df_plan) == 0:
@@ -1026,22 +1026,22 @@ def create_player_calendar_view(df_plan):
     # Convert date to string for display (just date, no day name)
     df_exp["Datum_str"] = df_exp["Datum_dt"].dt.strftime("%d.%m.%Y")
 
-    # Create pivot table: Players (rows) x Dates (columns)
+    # Create pivot table: Dates (rows) x Players (columns)
     pivot = df_exp.pivot_table(
-        index="Spieler_Name",
-        columns="Datum_str",
+        index="Datum_str",
+        columns="Spieler_Name",
         values="Match_Info",
         aggfunc=lambda x: " | ".join(x) if len(x) > 1 else x.iloc[0],
         fill_value=""
     )
 
-    # Sort columns by date
+    # Sort rows by date
     date_mapping = dict(zip(df_exp["Datum_str"], df_exp["Datum_dt"]))
-    sorted_cols = sorted(pivot.columns, key=lambda x: date_mapping.get(x, pd.Timestamp.min))
-    pivot = pivot[sorted_cols]
+    sorted_rows = sorted(pivot.index, key=lambda x: date_mapping.get(x, pd.Timestamp.min))
+    pivot = pivot.loc[sorted_rows]
 
-    # Sort index (player names) alphabetically
-    pivot = pivot.sort_index()
+    # Sort columns (player names) alphabetically
+    pivot = pivot[sorted(pivot.columns)]
 
     return pivot
 
@@ -1225,7 +1225,7 @@ with tab_calendar:
                                 cell.alignment = center_alignment
                                 cell.border = thin_border
 
-                                # First column (player names) - left align and bold
+                                # First column (dates) - left align and bold
                                 if col_idx == 1:
                                     cell.alignment = Alignment(horizontal="left", vertical="center")
                                     cell.font = Font(bold=True, size=10)
@@ -1245,7 +1245,7 @@ with tab_calendar:
                                         cell.font = font_b
 
                         # Set column widths
-                        ws.column_dimensions['A'].width = 20  # Player names
+                        ws.column_dimensions['A'].width = 15  # Dates
                         for col_idx in range(2, ws.max_column + 1):
                             col_letter = ws.cell(row=1, column=col_idx).column_letter
                             ws.column_dimensions[col_letter].width = 12
