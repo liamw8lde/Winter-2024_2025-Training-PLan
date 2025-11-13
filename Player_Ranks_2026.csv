@@ -1,43 +1,43 @@
-Spieler,Rank,Rank_Description
-Andreas Dank,5,Average
-Anke Ihde,6,Weakest
-Arndt Stueber,4,Above Average
-Bernd Robioneck,4,Above Average
-Bernd Sotzek,3,Strong
-Bjoern Junker,1,Strongest
-Carsten Gambal,4,Above Average
-Dirk Kistner,5,Average
-Frank Koller,4,Above Average
-Frank Petermann,2,Very Strong
-Gunnar Brix,6,Weakest
-Heiko Thomsen,4,Above Average
-Jan Pappenheim,5,Average
-Jens Hafner,6,Weakest
-Jens Krause,2,Very Strong
-Joerg Peters,2,Very Strong
-Juergen Hansen,3,Strong
-Kai Schroeder,4,Above Average
-Karsten Usinger,5,Average
-Kerstin Baarck,6,Weakest
-Lars Staubermann,2,Very Strong
-Lena Meiss,6,Weakest
-Liam Wilde,2,Very Strong
-Lorenz Kramp,4,Above Average
-Manfred Grell,4,Above Average
-Markus Muench,5,Average
-Martin Lange,2,Very Strong
-Martina Schmidt,6,Weakest
-Matthias Duddek,3,Strong
-Michael Bock,6,Weakest
-Michael Rabehl,6,Weakest
-Mohamad Albadry,5,Average
-Oliver Boess,3,Strong
-Patrick Buehrsch,1,Strongest
-Peter Plaehn,2,Very Strong
-Ralf Colditz,4,Above Average
-Sebastian Braune,6,Weakest
-Thomas Bretschneider,2,Very Strong
-Thomas Grueneberg,2,Very Strong
-Tobias Kahl,5,Average
-Torsten Bartel,5,Average
-Wolfgang Aleksik,6,Weakest
+Spieler,Rank
+Andreas Dank,5
+Anke Ihde,6
+Arndt Stüber,4
+Bernd Robioneck,4
+Bernd Sotzek,3
+Bjoern Junker,1
+Carsten Gambal,4
+Dirk Kistner,5
+Frank Petermann,2
+Gunnar Brix,6
+Heiko Thomsen,4
+Jan Pappenheim,5
+Jens Hafner,6
+Jens Krause,2
+Joerg Peters,2
+Juergen Hansen,2
+Kai Schroeder,4
+Karsten Usinger,5
+Kerstin Baarck,6
+Lars Staubermann,2
+Lena Meiss,5
+Liam Wilde,3
+Lorenz Kramp,6
+Manfred Grell,3
+Markus Muench,5
+Martin Lange,2
+Martina Schmidt,6
+Mats Lange,6
+Matthias Duddek,3
+Michael Bock,6
+Michael Rabehl,6
+Mohamad Albadry,5
+Oliver Boess,2
+Patrick Buehrsch,1
+Peter Plaehn,2
+Ralf Colditz,4
+Sebastian Braune,6
+Thomas Bretschneider,2
+Thomas Grueneberg,2
+Tobias Kahl,5
+Torsten Bartel,5
+Wolfgang Aleksik,6
