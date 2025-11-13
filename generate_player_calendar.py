@@ -2,13 +2,14 @@
 """
 Generate a Player Calendar Overview (Spieler-Kalender Übersicht) Excel spreadsheet.
 Shows each player's matches with E/D (Singles/Doubles), Court (A/B), and Time.
+Also shows blocked dates (holidays) and unavailable days.
 Color-coded for easy reading.
 """
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils.dataframe import dataframe_to_rows
-from datetime import datetime
+from datetime import datetime, date
 import re
 
 def load_plan():
@@ -25,6 +26,103 @@ def load_plan():
     df = df.sort_values("Datum_dt")
 
     return df
+
+def load_preferences():
+    """Load player preferences including holidays and available days"""
+    try:
+        df = pd.read_csv("Spieler_Preferences_2026.csv", dtype=str)
+        return df
+    except Exception as e:
+        print(f"Warning: Could not load preferences: {e}")
+        return pd.DataFrame()
+
+def parse_blocked_ranges(blocked_str):
+    """Parse blocked date ranges from string like '2026-01-01→2026-01-04;2026-02-01→2026-02-05'"""
+    if pd.isna(blocked_str) or not blocked_str or blocked_str.strip() == "":
+        return []
+
+    ranges = []
+    parts = str(blocked_str).split(";")
+    for part in parts:
+        part = part.strip()
+        if "→" in part:
+            try:
+                start_str, end_str = part.split("→")
+                start_date = datetime.strptime(start_str.strip(), "%Y-%m-%d").date()
+                end_date = datetime.strptime(end_str.strip(), "%Y-%m-%d").date()
+                ranges.append((start_date, end_date))
+            except:
+                continue
+    return ranges
+
+def parse_blocked_days(blocked_str):
+    """Parse specific blocked days from string like '2026-01-15;2026-01-22'"""
+    if pd.isna(blocked_str) or not blocked_str or blocked_str.strip() == "":
+        return []
+
+    days = []
+    parts = str(blocked_str).split(";")
+    for part in parts:
+        part = part.strip()
+        try:
+            day = datetime.strptime(part, "%Y-%m-%d").date()
+            days.append(day)
+        except:
+            continue
+    return days
+
+def parse_available_days(days_str):
+    """Parse available days from string like 'Montag;Mittwoch;Donnerstag'"""
+    if pd.isna(days_str) or not days_str or days_str.strip() == "":
+        return set()
+
+    # Map German day names to English
+    day_map = {
+        "Montag": "Monday",
+        "Dienstag": "Tuesday",
+        "Mittwoch": "Wednesday",
+        "Donnerstag": "Thursday",
+        "Freitag": "Friday",
+        "Samstag": "Saturday",
+        "Sonntag": "Sunday"
+    }
+
+    days = set()
+    parts = str(days_str).split(";")
+    for part in parts:
+        part = part.strip()
+        if part in day_map:
+            days.add(day_map[part])
+    return days
+
+def is_player_blocked(player_name, check_date, prefs_df):
+    """Check if a player is blocked (holiday/unavailable) on a specific date"""
+    player_prefs = prefs_df[prefs_df["Spieler"] == player_name]
+
+    if player_prefs.empty:
+        return False, None
+
+    row = player_prefs.iloc[0]
+
+    # Check blocked ranges
+    blocked_ranges = parse_blocked_ranges(row.get("BlockedRanges", ""))
+    for start, end in blocked_ranges:
+        if start <= check_date <= end:
+            return True, "🚫"  # Holiday/Blocked
+
+    # Check specific blocked days
+    blocked_days = parse_blocked_days(row.get("BlockedDays", ""))
+    if check_date in blocked_days:
+        return True, "🚫"  # Holiday/Blocked
+
+    # Check available days (day of week)
+    available_days = parse_available_days(row.get("AvailableDays", ""))
+    if available_days:  # If available days are specified
+        day_name = check_date.strftime("%A")  # Get English day name
+        if day_name not in available_days:
+            return True, "—"  # Not available this day of week
+
+    return False, None
 
 def extract_match_info(row):
     """Extract E/D, Court, Time from a match row"""
@@ -54,6 +152,9 @@ def generate_player_calendar():
     print("Loading training plan...")
     df = load_plan()
 
+    print("Loading player preferences (holidays, available days)...")
+    prefs_df = load_preferences()
+
     # Explode players into separate rows
     df["Spieler_list"] = df["Spieler"].str.split(",").apply(
         lambda xs: [x.strip() for x in xs if str(x).strip() and x.strip() != ""]
@@ -74,6 +175,7 @@ def generate_player_calendar():
 
     for date_dt in all_dates:
         date_str = pd.to_datetime(date_dt).strftime("%d.%m.%Y")
+        check_date = pd.to_datetime(date_dt).date()
         date_row = {"Datum": date_str}
 
         # For each player, find if they have a match on this date
@@ -85,12 +187,17 @@ def generate_player_calendar():
             ]
 
             if not matches.empty:
-                # Should only be one match per player per date
+                # Player has a match - show match info
                 match = matches.iloc[0]
                 match_type, court, time = extract_match_info(match)
                 cell_value = f"{match_type} {time} {court}"
             else:
-                cell_value = ""
+                # No match - check if player is blocked/unavailable
+                is_blocked, marker = is_player_blocked(player, check_date, prefs_df)
+                if is_blocked and marker:
+                    cell_value = marker  # Show 🚫 for holiday or — for unavailable day
+                else:
+                    cell_value = ""  # Available but not scheduled
 
             date_row[player] = cell_value
 
@@ -99,7 +206,8 @@ def generate_player_calendar():
     # Create DataFrame
     df_calendar = pd.DataFrame(calendar_data)
 
-    print(f"Generated calendar with {len(df_calendar)} players and {len(all_dates)} dates")
+    print(f"Generated calendar with {len(df_calendar)} dates and {len(all_players)} players")
+    print(f"Legend: 🚫 = Holiday/Blocked, — = Not available this day")
 
     # Create Excel workbook with formatting
     print("Creating formatted Excel file...")
@@ -129,13 +237,19 @@ def generate_player_calendar():
     # Color coding and styling
     # E (Einzel/Singles) = Light Blue
     # D (Doppel/Doubles) = Light Green
+    # 🚫 (Blocked/Holiday) = Light Red
+    # — (Unavailable day) = Light Gray
     einzel_fill = PatternFill(start_color="DEEBF7", end_color="DEEBF7", fill_type="solid")
     doppel_fill = PatternFill(start_color="E2F0D9", end_color="E2F0D9", fill_type="solid")
+    blocked_fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")  # Light red
+    unavailable_fill = PatternFill(start_color="F0F0F0", end_color="F0F0F0", fill_type="solid")  # Light gray
 
     # Court A = Bold
     # Court B = Normal
     font_a = Font(bold=True, size=10)
     font_b = Font(bold=False, size=10)
+    font_blocked = Font(bold=False, size=10, color="CC0000")  # Red text for blocked
+    font_unavailable = Font(bold=False, size=10, color="808080")  # Gray text for unavailable
 
     center_alignment = Alignment(horizontal="center", vertical="center")
 
@@ -160,20 +274,31 @@ def generate_player_calendar():
                 cell.font = Font(bold=True, size=10)
                 continue
 
-            # Data cells - color code based on match type
+            # Data cells - color code based on content
             cell_value = str(cell.value or "")
             if cell_value:
-                # Color based on E or D
-                if cell_value.startswith("E "):
+                # Blocked/Holiday marker
+                if cell_value == "🚫":
+                    cell.fill = blocked_fill
+                    cell.font = font_blocked
+                # Unavailable day marker
+                elif cell_value == "—":
+                    cell.fill = unavailable_fill
+                    cell.font = font_unavailable
+                # Singles match
+                elif cell_value.startswith("E "):
                     cell.fill = einzel_fill
+                    if " A" in cell_value:
+                        cell.font = font_a
+                    elif " B" in cell_value:
+                        cell.font = font_b
+                # Doubles match
                 elif cell_value.startswith("D "):
                     cell.fill = doppel_fill
-
-                # Font based on Court A or B
-                if " A" in cell_value:
-                    cell.font = font_a
-                elif " B" in cell_value:
-                    cell.font = font_b
+                    if " A" in cell_value:
+                        cell.font = font_a
+                    elif " B" in cell_value:
+                        cell.font = font_b
 
     # Set column widths
     ws.column_dimensions['A'].width = 15  # Dates
@@ -214,10 +339,14 @@ if __name__ == "__main__":
     print("  D = Doppel (Doubles)")
     print("  A/B = Court A or B")
     print("  Time = Match start time (HH:MM)")
+    print("  🚫 = Holiday / Blocked date (player not available)")
+    print("  — = Day not available (player only plays specific days)")
     print()
     print("Color Coding:")
-    print("  Light Blue = Singles (E)")
-    print("  Light Green = Doubles (D)")
+    print("  🔵 Light Blue = Singles (E)")
+    print("  🟢 Light Green = Doubles (D)")
+    print("  🔴 Light Red = Blocked/Holiday (🚫)")
+    print("  ⚪ Light Gray = Unavailable day (—)")
     print("  Bold = Court A")
     print("  Normal = Court B")
     print()
