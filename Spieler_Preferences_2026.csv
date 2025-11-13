@@ -1,18 +1,17 @@
+
 Spieler,ValidFrom,ValidTo,AvailableDays,Preference,BlockedRanges,BlockedDays,Notes,Timestamp
 Bernd Robioneck,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-04,,,2025-10-27T19:40:11Z
 Carsten Gambal,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-01,,,2025-10-27T19:40:11Z
+Frank Koller,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-05,,,2025-10-27T19:40:11Z
 Frank Petermann,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
 Gunnar Brix,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
 Markus Muench,2026-01-01,2026-04-26,Mittwoch;Sonntag,keine Präferenz,2026-01-01→2026-01-04,,,2025-10-27T19:40:11Z
-Martin Lange,2026-01-01,2026-04-26,Montag,keine Präferenz,2026-01-01→2026-01-04,,,2025-10-27T19:40:11Z
 Martina Schmidt,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,nur Doppel,2026-01-01→2026-01-01,,,2025-10-27T19:40:11Z
 Michael Rabehl,2026-01-01,2026-04-26,Montag;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
-Oliver Boess,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
 Patrick Buehrsch,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
 Sebastian Braune,2026-01-01,2026-04-26,Montag;Donnerstag,keine Präferenz,2026-01-01→2026-01-06,,,2025-10-27T19:40:11Z
 Torsten Bartel,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
 Thomas Grueneberg,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,,,Würde gerne einmal pro Woche spielen! ,2025-11-05 17:54:54
-Mohamad Albadry,2026-01-01,2026-04-26,Montag,nur Doppel,2026-02-18→2026-03-18,,Es wäre schön wenn du mich mit guten Spielern spielen lassen und nicht wie jetzt mit Anfängern.,2025-11-05 17:57:22
 Andreas Dank,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,,,"Bitte plane mich  mindesten 1 mal pro Woche zum  spielen ein. 
 Bitte nicht nur Doppel. (Hatte bisher nur Doppel) . 
 Spielbeginn darf auch gerne mal vor 20:00Uhr sein",2025-11-05 18:08:12
@@ -43,4 +42,9 @@ Matthias Duddek,2026-01-01,2026-04-26,Mittwoch,nur Einzel,,,beginn 18 Uhr oder 1
 Lena Meiss,2026-01-01,2026-04-26,Montag,nur Doppel,,,Gerne immer mal mit Kerstin Baarck,2025-11-12 08:17:53
 Kai Schroeder,2026-01-01,2026-04-26,Mittwoch,nur Einzel,2026-01-19→2026-01-31,,,2025-11-12 08:22:27
 Lars Staubermann,2026-01-01,2026-04-26,Montag;Donnerstag,keine Präferenz,2026-03-23→2026-04-12,,,2025-11-12 08:24:59
-Joerg Peters,2026-01-01,2026-04-26,Mittwoch,keine Präferenz,,,nan,2025-11-12 08:35:35
+Joerg Peters,2026-01-01,2026-04-26,Mittwoch,keine Präferenz,,,,2025-11-12 08:35:35
+Mohamad Albadry,2026-01-01,2026-04-26,Montag,nur Doppel,2026-02-18→2026-03-18;2026-04-20→2026-04-26,,"Es wäre schön wenn du mich mit guten Spielern spielen lassen und nicht wie jetzt mit Anfängern.
+Das habe von dir letzte Mal auch gesagt!!!",2025-11-12 16:15:56
+Martin Lange,2026-01-01,2026-04-26,Montag,nur Doppel,,2026-04-06,,2025-11-12 16:26:14
+Oliver Boess,2026-01-01,2026-04-26,Donnerstag,nur Einzel,2026-02-09→2026-02-15;2026-03-30→2026-04-05,,"Nicht vor 19 Uhr einsetzbar 
+Keine Feiertage ",2025-11-12 20:19:06
