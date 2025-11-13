@@ -990,7 +990,9 @@ def check_plan_violations(df_plan, available_days, preferences, holidays):
 
 # ==================== SPREADSHEET VIEW FUNCTION ====================
 def create_player_calendar_view(df_plan):
-    """Create a pivot table with dates as rows and players as columns"""
+    """Create a pivot table with players as rows and dates as columns
+    Format: E/D Time Court (e.g., 'E 19:00 A' or 'D 20:00 B')
+    """
     if df_plan.empty or len(df_plan) == 0:
         return pd.DataFrame()
 
@@ -1000,28 +1002,46 @@ def create_player_calendar_view(df_plan):
     if df_exp.empty:
         return pd.DataFrame()
 
-    # Create display value: Court + Time
-    df_exp["Court_Time"] = df_exp.apply(
-        lambda row: f"{row['S_Court']} {row['S_Time']}-{row['S_Dur']}min"
-        if row['S_Court'] and row['S_Time'] else "",
-        axis=1
-    )
+    # Create display value: E/D Time Court
+    def format_match(row):
+        # Determine E (Einzel) or D (Doppel)
+        typ = row['Typ']
+        if pd.isna(typ):
+            match_type = "?"
+        elif typ.lower().startswith("einzel"):
+            match_type = "E"
+        elif typ.lower().startswith("doppel"):
+            match_type = "D"
+        else:
+            match_type = "?"
 
-    # Convert date to string for display
-    df_exp["Datum_str"] = df_exp["Datum_dt"].dt.strftime("%d.%m.%Y (%a)")
+        # Get time and court
+        time = row['S_Time'] if row['S_Time'] else "?"
+        court = row['S_Court'] if row['S_Court'] else "?"
 
-    # Create pivot table
+        return f"{match_type} {time} {court}"
+
+    df_exp["Match_Info"] = df_exp.apply(format_match, axis=1)
+
+    # Convert date to string for display (just date, no day name)
+    df_exp["Datum_str"] = df_exp["Datum_dt"].dt.strftime("%d.%m.%Y")
+
+    # Create pivot table: Players (rows) x Dates (columns)
     pivot = df_exp.pivot_table(
-        index="Datum_str",
-        columns="Spieler_Name",
-        values="Court_Time",
+        index="Spieler_Name",
+        columns="Datum_str",
+        values="Match_Info",
         aggfunc=lambda x: " | ".join(x) if len(x) > 1 else x.iloc[0],
         fill_value=""
     )
 
-    # Sort by date (need to use original datetime for sorting)
+    # Sort columns by date
     date_mapping = dict(zip(df_exp["Datum_str"], df_exp["Datum_dt"]))
-    pivot = pivot.loc[sorted(pivot.index, key=lambda x: date_mapping.get(x, pd.Timestamp.min))]
+    sorted_cols = sorted(pivot.columns, key=lambda x: date_mapping.get(x, pd.Timestamp.min))
+    pivot = pivot[sorted_cols]
+
+    # Sort index (player names) alphabetically
+    pivot = pivot.sort_index()
 
     return pivot
 
@@ -1125,6 +1145,9 @@ with tab_calendar:
     st.header("📅 Spieler-Kalender Übersicht")
     st.caption("Zeigt wann welcher Spieler auf welchem Platz spielt")
 
+    # Legend
+    st.info("**Format:** E/D Time Court  |  **E** = Einzel (Singles), **D** = Doppel (Doubles)  |  **A/B** = Court  |  **Time** = HH:MM")
+
     # Use working plan or result plan if available
     display_df = st.session_state.get("df_result", st.session_state.df_work)
 
@@ -1140,14 +1163,116 @@ with tab_calendar:
                 height=600
             )
 
-            # Download option
-            csv_bytes = pivot_df.to_csv().encode("utf-8")
-            st.download_button(
-                "📥 Kalender-Ansicht als CSV herunterladen",
-                data=csv_bytes,
-                file_name="Spieler_Kalender_2026.csv",
-                mime="text/csv"
-            )
+            # Download options
+            col1, col2 = st.columns(2)
+
+            with col1:
+                # CSV download
+                csv_bytes = pivot_df.to_csv().encode("utf-8")
+                st.download_button(
+                    "📥 Als CSV herunterladen",
+                    data=csv_bytes,
+                    file_name="Spieler_Kalender_2026.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+
+            with col2:
+                # Excel download with color formatting
+                if st.button("📊 Als Excel (mit Farben) herunterladen", use_container_width=True):
+                    try:
+                        from openpyxl import Workbook
+                        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+                        from openpyxl.utils.dataframe import dataframe_to_rows
+                        import io
+
+                        # Create workbook
+                        wb = Workbook()
+                        ws = wb.active
+                        ws.title = "Spieler-Kalender 2026"
+
+                        # Write data
+                        for r in dataframe_to_rows(pivot_df, index=True, header=True):
+                            ws.append(r)
+
+                        # Style header row
+                        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                        header_font = Font(bold=True, color="FFFFFF", size=11)
+                        header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+                        for cell in ws[1]:
+                            cell.fill = header_fill
+                            cell.font = header_font
+                            cell.alignment = header_alignment
+
+                        # Color coding
+                        einzel_fill = PatternFill(start_color="DEEBF7", end_color="DEEBF7", fill_type="solid")
+                        doppel_fill = PatternFill(start_color="E2F0D9", end_color="E2F0D9", fill_type="solid")
+                        font_a = Font(bold=True, size=10)
+                        font_b = Font(bold=False, size=10)
+                        center_alignment = Alignment(horizontal="center", vertical="center")
+                        thin_border = Border(
+                            left=Side(style='thin'),
+                            right=Side(style='thin'),
+                            top=Side(style='thin'),
+                            bottom=Side(style='thin')
+                        )
+
+                        # Apply styling to data cells
+                        for row_idx in range(2, ws.max_row + 1):
+                            for col_idx in range(1, ws.max_column + 1):
+                                cell = ws.cell(row=row_idx, column=col_idx)
+                                cell.alignment = center_alignment
+                                cell.border = thin_border
+
+                                # First column (player names) - left align and bold
+                                if col_idx == 1:
+                                    cell.alignment = Alignment(horizontal="left", vertical="center")
+                                    cell.font = Font(bold=True, size=10)
+                                    continue
+
+                                # Data cells - color code based on match type
+                                cell_value = str(cell.value or "")
+                                if cell_value:
+                                    if cell_value.startswith("E "):
+                                        cell.fill = einzel_fill
+                                    elif cell_value.startswith("D "):
+                                        cell.fill = doppel_fill
+
+                                    if " A" in cell_value:
+                                        cell.font = font_a
+                                    elif " B" in cell_value:
+                                        cell.font = font_b
+
+                        # Set column widths
+                        ws.column_dimensions['A'].width = 20  # Player names
+                        for col_idx in range(2, ws.max_column + 1):
+                            col_letter = ws.cell(row=1, column=col_idx).column_letter
+                            ws.column_dimensions[col_letter].width = 12
+
+                        # Freeze panes
+                        ws.freeze_panes = "B2"
+
+                        # Save to bytes
+                        excel_buffer = io.BytesIO()
+                        wb.save(excel_buffer)
+                        excel_bytes = excel_buffer.getvalue()
+
+                        st.download_button(
+                            "💾 Excel-Datei speichern",
+                            data=excel_bytes,
+                            file_name="Spieler_Kalender_2026.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
+
+                        st.success("✓ Excel-Datei generiert! Klicke auf den Button oben zum Herunterladen.")
+                        st.caption("🔵 Blau = Einzel (E)  |  🟢 Grün = Doppel (D)  |  **Fett** = Platz A  |  Normal = Platz B")
+
+                    except ImportError:
+                        st.error("❌ openpyxl nicht installiert. Verwende CSV-Download stattdessen.")
+                    except Exception as e:
+                        st.error(f"❌ Fehler beim Erstellen der Excel-Datei: {e}")
         else:
             st.warning("⚠️ Konnte keine Kalenderansicht erstellen.")
 
