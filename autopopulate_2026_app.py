@@ -988,19 +988,119 @@ def check_plan_violations(df_plan, available_days, preferences, holidays):
 
     return violations_list
 
+# ==================== HELPER FUNCTIONS FOR CALENDAR VIEW ====================
+def parse_blocked_ranges(blocked_str):
+    """Parse blocked date ranges from string like '2026-01-01→2026-01-04;2026-02-01→2026-02-05'"""
+    if pd.isna(blocked_str) or not blocked_str or str(blocked_str).strip() == "":
+        return []
+
+    ranges = []
+    parts = str(blocked_str).split(";")
+    for part in parts:
+        part = part.strip()
+        if "→" in part:
+            try:
+                start_str, end_str = part.split("→")
+                start_date = datetime.strptime(start_str.strip(), "%Y-%m-%d").date()
+                end_date = datetime.strptime(end_str.strip(), "%Y-%m-%d").date()
+                ranges.append((start_date, end_date))
+            except:
+                continue
+    return ranges
+
+def parse_blocked_days(blocked_str):
+    """Parse specific blocked days from string like '2026-01-15;2026-01-22'"""
+    if pd.isna(blocked_str) or not blocked_str or str(blocked_str).strip() == "":
+        return []
+
+    days = []
+    parts = str(blocked_str).split(";")
+    for part in parts:
+        part = part.strip()
+        try:
+            day = datetime.strptime(part, "%Y-%m-%d").date()
+            days.append(day)
+        except:
+            continue
+    return days
+
+def parse_available_days_cal(days_str):
+    """Parse available days from string like 'Montag;Mittwoch;Donnerstag'"""
+    if pd.isna(days_str) or not days_str or str(days_str).strip() == "":
+        return set()
+
+    # Map German day names to English
+    day_map = {
+        "Montag": "Monday",
+        "Dienstag": "Tuesday",
+        "Mittwoch": "Wednesday",
+        "Donnerstag": "Thursday",
+        "Freitag": "Friday",
+        "Samstag": "Saturday",
+        "Sonntag": "Sunday"
+    }
+
+    days = set()
+    parts = str(days_str).split(";")
+    for part in parts:
+        part = part.strip()
+        if part in day_map:
+            days.add(day_map[part])
+    return days
+
+def is_player_blocked_cal(player_name, check_date, prefs_df):
+    """Check if a player is blocked (holiday/unavailable) on a specific date"""
+    player_prefs = prefs_df[prefs_df["Spieler"] == player_name]
+
+    if player_prefs.empty:
+        return False, None
+
+    row = player_prefs.iloc[0]
+
+    # Check blocked ranges
+    blocked_ranges = parse_blocked_ranges(row.get("BlockedRanges", ""))
+    for start, end in blocked_ranges:
+        if start <= check_date <= end:
+            return True, "🚫"  # Holiday/Blocked
+
+    # Check specific blocked days
+    blocked_days = parse_blocked_days(row.get("BlockedDays", ""))
+    if check_date in blocked_days:
+        return True, "🚫"  # Holiday/Blocked
+
+    # Check available days (day of week)
+    available_days = parse_available_days_cal(row.get("AvailableDays", ""))
+    if available_days:  # If available days are specified
+        day_name = check_date.strftime("%A")  # Get English day name
+        if day_name not in available_days:
+            return True, "—"  # Not available this day of week
+
+    return False, None
+
 # ==================== SPREADSHEET VIEW FUNCTION ====================
 def create_player_calendar_view(df_plan):
     """Create a pivot table with dates as rows and players as columns
     Format: E/D Time Court (e.g., 'E 19:00 A' or 'D 20:00 B')
+    Also shows blocked dates (🚫) and unavailable days (—)
     """
     if df_plan.empty or len(df_plan) == 0:
         return pd.DataFrame()
+
+    # Load preferences for blocked dates
+    try:
+        prefs_df = load_preferences_csv(PREFS_FILE)
+    except:
+        prefs_df = pd.DataFrame()
 
     # Explode to get one row per player
     _, df_exp = postprocess_plan(df_plan[["Datum", "Tag", "Slot", "Typ", "Spieler"]])
 
     if df_exp.empty:
         return pd.DataFrame()
+
+    # Get all unique dates and players from the plan
+    all_dates = sorted(df_exp["Datum_dt"].dropna().unique())
+    all_players = sorted(df_exp["Spieler_Name"].dropna().unique())
 
     # Create display value: E/D Time Court
     def format_match(row):
@@ -1034,6 +1134,20 @@ def create_player_calendar_view(df_plan):
         aggfunc=lambda x: " | ".join(x) if len(x) > 1 else x.iloc[0],
         fill_value=""
     )
+
+    # Add blocked/unavailable markers for empty cells
+    if not prefs_df.empty:
+        date_mapping = dict(zip(df_exp["Datum_str"], df_exp["Datum_dt"]))
+
+        for date_str in pivot.index:
+            check_date = pd.to_datetime(date_mapping.get(date_str)).date() if date_str in date_mapping else None
+            if check_date:
+                for player in pivot.columns:
+                    # Only check empty cells (no match scheduled)
+                    if pivot.loc[date_str, player] == "":
+                        is_blocked, marker = is_player_blocked_cal(player, check_date, prefs_df)
+                        if is_blocked and marker:
+                            pivot.loc[date_str, player] = marker
 
     # Sort rows by date
     date_mapping = dict(zip(df_exp["Datum_str"], df_exp["Datum_dt"]))
@@ -1146,7 +1260,7 @@ with tab_calendar:
     st.caption("Zeigt wann welcher Spieler auf welchem Platz spielt")
 
     # Legend
-    st.info("**Format:** E/D Time Court  |  **E** = Einzel (Singles), **D** = Doppel (Doubles)  |  **A/B** = Court  |  **Time** = HH:MM")
+    st.info("**Format:** E/D Time Court  |  **E** = Einzel (Singles), **D** = Doppel (Doubles)  |  **A/B** = Court  |  **Time** = HH:MM  |  **🚫** = Holiday/Blocked  |  **—** = Day not available")
 
     # Use working plan or result plan if available
     display_df = st.session_state.get("df_result", st.session_state.df_work)
@@ -1208,8 +1322,14 @@ with tab_calendar:
                         # Color coding
                         einzel_fill = PatternFill(start_color="DEEBF7", end_color="DEEBF7", fill_type="solid")
                         doppel_fill = PatternFill(start_color="E2F0D9", end_color="E2F0D9", fill_type="solid")
+                        blocked_fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")  # Light red
+                        unavailable_fill = PatternFill(start_color="F0F0F0", end_color="F0F0F0", fill_type="solid")  # Light gray
+
                         font_a = Font(bold=True, size=10)
                         font_b = Font(bold=False, size=10)
+                        font_blocked = Font(bold=False, size=10, color="CC0000")  # Red text
+                        font_unavailable = Font(bold=False, size=10, color="808080")  # Gray text
+
                         center_alignment = Alignment(horizontal="center", vertical="center")
                         thin_border = Border(
                             left=Side(style='thin'),
@@ -1231,18 +1351,31 @@ with tab_calendar:
                                     cell.font = Font(bold=True, size=10)
                                     continue
 
-                                # Data cells - color code based on match type
+                                # Data cells - color code based on content
                                 cell_value = str(cell.value or "")
                                 if cell_value:
-                                    if cell_value.startswith("E "):
+                                    # Blocked/Holiday marker
+                                    if cell_value == "🚫":
+                                        cell.fill = blocked_fill
+                                        cell.font = font_blocked
+                                    # Unavailable day marker
+                                    elif cell_value == "—":
+                                        cell.fill = unavailable_fill
+                                        cell.font = font_unavailable
+                                    # Singles match
+                                    elif cell_value.startswith("E "):
                                         cell.fill = einzel_fill
+                                        if " A" in cell_value:
+                                            cell.font = font_a
+                                        elif " B" in cell_value:
+                                            cell.font = font_b
+                                    # Doubles match
                                     elif cell_value.startswith("D "):
                                         cell.fill = doppel_fill
-
-                                    if " A" in cell_value:
-                                        cell.font = font_a
-                                    elif " B" in cell_value:
-                                        cell.font = font_b
+                                        if " A" in cell_value:
+                                            cell.font = font_a
+                                        elif " B" in cell_value:
+                                            cell.font = font_b
 
                         # Set column widths
                         ws.column_dimensions['A'].width = 15  # Dates
