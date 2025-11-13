@@ -1180,12 +1180,12 @@ with col4:
 if len(st.session_state.df_work) > 0:
     col_clear, col_check, col_spacer = st.columns([1, 1, 2])
     with col_clear:
-        if st.button("🗑️ Plan leeren", use_container_width=True, type="secondary"):
+        if st.button("🗑️ Plan leeren", width='stretch', type="secondary"):
             # Store confirmation state
             st.session_state.show_clear_confirm = True
 
     with col_check:
-        if st.button("⚠️ Regeln prüfen", use_container_width=True, type="secondary"):
+        if st.button("⚠️ Regeln prüfen", width='stretch', type="secondary"):
             st.session_state.run_error_check = True
 
     # Confirmation dialog for clear
@@ -1193,7 +1193,7 @@ if len(st.session_state.df_work) > 0:
         st.warning("⚠️ **Warnung:** Dies löscht alle {0} Slots aus dem aktuellen Plan!".format(len(st.session_state.df_work)))
         col_yes, col_no, col_space = st.columns([1, 1, 2])
         with col_yes:
-            if st.button("✅ Ja, leeren", use_container_width=True, type="primary"):
+            if st.button("✅ Ja, leeren", width='stretch', type="primary"):
                 # Create empty dataframe with correct structure
                 empty_plan = pd.DataFrame(columns=["Datum", "Tag", "Slot", "Typ", "Spieler"])
                 st.session_state.df_work, _ = postprocess_plan(empty_plan)
@@ -1201,7 +1201,7 @@ if len(st.session_state.df_work) > 0:
                 st.success("✅ Plan geleert! Bereit für Autopopulation.")
                 st.rerun()
         with col_no:
-            if st.button("❌ Abbrechen", use_container_width=True):
+            if st.button("❌ Abbrechen", width='stretch'):
                 st.session_state.show_clear_confirm = False
                 st.rerun()
 
@@ -1229,7 +1229,7 @@ if st.session_state.get("run_error_check", False):
             display_df["Datum"] = display_df["Datum"].astype(str)
             st.dataframe(
                 display_df[["Datum", "Tag", "Slot", "Spieler", "Violation"]],
-                use_container_width=True,
+                width='stretch',
                 height=400
             )
 
@@ -1237,16 +1237,16 @@ if st.session_state.get("run_error_check", False):
         with st.expander("📊 Zusammenfassung nach Verstoßtyp"):
             violation_counts = df_violations["Violation"].value_counts().reset_index()
             violation_counts.columns = ["Verstoß", "Anzahl"]
-            st.dataframe(violation_counts, use_container_width=True)
+            st.dataframe(violation_counts, width='stretch')
 
         # Summary by player
         with st.expander("👥 Zusammenfassung nach Spieler"):
             player_counts = df_violations["Spieler"].value_counts().reset_index()
             player_counts.columns = ["Spieler", "Anzahl Verstöße"]
-            st.dataframe(player_counts, use_container_width=True)
+            st.dataframe(player_counts, width='stretch')
 
     # Close button
-    if st.button("❌ Prüfung schließen", use_container_width=False):
+    if st.button("❌ Prüfung schließen", width='content'):
         st.session_state.run_error_check = False
         st.rerun()
 
@@ -1273,7 +1273,7 @@ with tab_calendar:
         if not pivot_df.empty:
             st.dataframe(
                 pivot_df,
-                use_container_width=True,
+                width='stretch',
                 height=600
             )
 
@@ -1288,12 +1288,12 @@ with tab_calendar:
                     data=csv_bytes,
                     file_name="Spieler_Kalender_2026.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    width='stretch'
                 )
 
             with col2:
                 # Excel download with color formatting
-                if st.button("📊 Als Excel (mit Farben) herunterladen", use_container_width=True):
+                if st.button("📊 Als Excel (mit Farben) herunterladen", width='stretch'):
                     try:
                         from openpyxl import Workbook
                         from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -1396,7 +1396,7 @@ with tab_calendar:
                             data=excel_bytes,
                             file_name="Spieler_Kalender_2026.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True
+                            width='stretch'
                         )
 
                         st.success("✓ Excel-Datei generiert! Klicke auf den Button oben zum Herunterladen.")
@@ -1448,7 +1448,7 @@ with tab_auto:
         # Actions
         col_preview, col_reset = st.columns(2)
         with col_preview:
-            if st.button("🔍 Vorschau generieren", use_container_width=True, type="primary"):
+            if st.button("🔍 Vorschau generieren", width='stretch', type="primary"):
                 with st.spinner("Generiere Auto-Population für 2026..."):
                     df_result, filled, skipped = autopopulate_plan(
                         st.session_state.df_work,
@@ -1465,7 +1465,7 @@ with tab_auto:
                     st.rerun()
 
         with col_reset:
-            if st.button("🔄 Plan zurücksetzen", use_container_width=True):
+            if st.button("🔄 Plan zurücksetzen", width='stretch'):
                 st.session_state.df_work = df_plan.copy()
                 st.session_state.pop("df_result", None)
                 st.session_state.pop("filled_slots", None)
@@ -1545,14 +1545,14 @@ with tab_auto:
             player_counts["Rang"] = player_counts["Spieler"].map(lambda x: str(RANK.get(x, "?")))
             # Reorder columns
             player_counts = player_counts[["Spieler", "Rang", "Anzahl Matches"]]
-            st.dataframe(player_counts, use_container_width=True, height=400)
+            st.dataframe(player_counts, width='stretch', height=400)
 
             # Save buttons
             st.markdown("---")
             col_save, col_download, col_discard = st.columns(3)
 
             with col_save:
-                if st.button("💾 Auf GitHub speichern (2026)", use_container_width=True, type="primary"):
+                if st.button("💾 Auf GitHub speichern (2026)", width='stretch', type="primary"):
                     try:
                         df_to_save = st.session_state.df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]]
                         csv_bytes = df_to_save.to_csv(index=False).encode("utf-8")
@@ -1577,11 +1577,11 @@ with tab_auto:
                         data=csv_bytes,
                         file_name="Winterplan_2026_autopopulated.csv",
                         mime="text/csv",
-                        use_container_width=True
+                        width='stretch'
                     )
 
             with col_discard:
-                if st.button("🗑️ Vorschau verwerfen", use_container_width=True):
+                if st.button("🗑️ Vorschau verwerfen", width='stretch'):
                     st.session_state.pop("df_result", None)
                     st.session_state.pop("filled_slots", None)
                     st.session_state.pop("skipped_slots", None)
@@ -1624,7 +1624,7 @@ with tab_rankings:
     st.write("**Bearbeite Rankings:** (Doppelklick auf Rang-Zelle zum Ändern)")
     edited_df = st.data_editor(
         rank_df,
-        use_container_width=True,
+        width='stretch',
         num_rows="dynamic",  # Allow adding/deleting rows
         height=500,
         column_config={
@@ -1652,7 +1652,7 @@ with tab_rankings:
             "Rang": range(1, 7),
             "Anzahl": [rank_counts.get(i, 0) for i in range(1, 7)]
         })
-        st.dataframe(rank_dist, use_container_width=True, hide_index=True)
+        st.dataframe(rank_dist, width='stretch', hide_index=True)
 
     with col2:
         st.subheader("✅ Statistiken")
@@ -1665,7 +1665,7 @@ with tab_rankings:
     col_save, col_download, col_reset = st.columns(3)
 
     with col_save:
-        if st.button("💾 Rankings speichern", use_container_width=True, type="primary"):
+        if st.button("💾 Rankings speichern", width='stretch', type="primary"):
             try:
                 # Update session state
                 new_ranks = {}
@@ -1707,11 +1707,11 @@ with tab_rankings:
             data=csv_bytes,
             file_name=RANK_FILE,
             mime="text/csv",
-            use_container_width=True
+            width='stretch'
         )
 
     with col_reset:
-        if st.button("🔄 Änderungen verwerfen", use_container_width=True):
+        if st.button("🔄 Änderungen verwerfen", width='stretch'):
             st.session_state.edited_ranks = RANK.copy()
             st.rerun()
 
@@ -1881,7 +1881,7 @@ with tab_player:
                         # Display table
                         st.dataframe(
                             display_matches,
-                            use_container_width=True,
+                            width='stretch',
                             height=400,
                             hide_index=True
                         )
@@ -1960,4 +1960,4 @@ with st.expander("🏆 Spieler-Rankings"):
         {"Rang": 5, "Beschreibung": "Durchschnittlich", "Anzahl Spieler": rank_counts.get(5, 0)},
         {"Rang": 6, "Beschreibung": "Schwächster", "Anzahl Spieler": rank_counts.get(6, 0)},
     ])
-    st.dataframe(rank_df, use_container_width=True, hide_index=True)
+    st.dataframe(rank_df, width='stretch', hide_index=True)
