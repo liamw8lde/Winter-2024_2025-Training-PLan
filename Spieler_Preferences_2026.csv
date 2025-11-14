@@ -1,5 +1,4 @@
 Spieler,ValidFrom,ValidTo,AvailableDays,Preference,BlockedRanges,BlockedDays,Notes,Timestamp
-Bernd Robioneck,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-04,,,2025-10-27T19:40:11Z
 Carsten Gambal,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-01,,,2025-10-27T19:40:11Z
 Frank Koller,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-05,,,2025-10-27T19:40:11Z
 Frank Petermann,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
@@ -46,4 +45,5 @@ Martin Lange,2026-01-01,2026-04-26,Montag,nur Doppel,,2026-04-06,,2025-11-12 16:
 Oliver Boess,2026-01-01,2026-04-26,Donnerstag,nur Einzel,2026-02-09→2026-02-15;2026-03-30→2026-04-05,,"Nicht vor 19 Uhr einsetzbar 
 Keine Feiertage ",2025-11-12 20:19:06
 Michael Rabehl,2026-01-01,2026-04-26,Montag;Donnerstag,keine Präferenz,,,,2025-11-13 20:57:33
-Sebastian Braune,2026-01-01,2026-04-26,Montag;Donnerstag,nur Doppel,2026-01-01→2026-01-06;2026-03-26→2026-04-12,2026-01-12;2026-02-09;2026-02-23;2026-03-05;2026-03-19,nan,2025-11-13 21:49:10
+Sebastian Braune,2026-01-01,2026-04-26,Montag;Donnerstag,nur Doppel,2026-01-01→2026-01-06;2026-03-26→2026-04-12,2026-01-12;2026-02-09;2026-02-23;2026-03-05;2026-03-19,,2025-11-13 21:49:10
+Bernd Robioneck,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-04;2026-01-22→2026-01-29;2026-02-23→2026-03-15;2026-03-25→2026-03-31,,nan,2025-11-14 09:36:25
