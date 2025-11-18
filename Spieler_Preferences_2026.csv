@@ -1,6 +1,5 @@
 Spieler,ValidFrom,ValidTo,AvailableDays,Preference,BlockedRanges,BlockedDays,Notes,Timestamp
 Frank Koller,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-05,,,2025-10-27T19:40:11Z
-Frank Petermann,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
 Patrick Buehrsch,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
 Torsten Bartel,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
 Thomas Grueneberg,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,,,Würde gerne einmal pro Woche spielen! ,2025-11-05 17:54:54
@@ -48,3 +47,4 @@ Gunnar Brix,2026-01-01,2026-04-26,Montag;Mittwoch,nur Doppel,2026-01-01→2026-0
 Carsten Gambal,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-01;2026-04-20→2026-04-23,2026-01-01;2026-01-28;2026-01-26;2026-04-02;2026-04-06,,2025-11-17 08:16:44
 Martina Schmidt,2026-01-01,2026-04-26,Montag;Mittwoch,nur Doppel,2026-03-11→2026-03-17,2026-01-01;2026-02-02,,2025-11-17 15:56:11
 Markus Muench,2026-01-01,2026-04-26,Mittwoch,keine Präferenz,2026-01-01→2026-01-04;2026-02-09→2026-02-15;2026-02-20→2026-02-28,,,2025-11-18 16:42:28
+Frank Petermann,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,2026-01-19→2026-01-23;2026-02-09→2026-02-20;2026-03-09→2026-03-17;2026-04-06→2026-04-10,2026-02-02;2026-03-16,"Doppelrunde am Montag 20:00 PLA mit Peter, Börn, Martin bitte berücksichtigen!!!",2025-11-18 21:59:41
