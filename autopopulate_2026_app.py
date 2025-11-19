@@ -80,6 +80,7 @@ MONTHLY_LIMITS = {
 # Season match limits (player -> max matches per season)
 SEASON_LIMITS = {
     "Torsten Bartel": 3,  # Max 3 matches for entire 2026 season
+    "Patrick Buehrsch": 6,  # Max 6 matches for entire 2026 season
 }
 
 # Season match targets (player -> target number of matches)
