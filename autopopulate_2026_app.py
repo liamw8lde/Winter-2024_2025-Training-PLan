@@ -64,7 +64,7 @@ WOMEN_SINGLE_BAN = {"Anke Ihde", "Lena Meiss", "Martina Schmidt", "Kerstin Baarc
 
 # Paired players - must play at the same time (different courts OK)
 PAIRED_PLAYERS = [
-    ("Lena Meiss", "Kerstin Baarck"),  # Must play at same time
+    # ("Lena Meiss", "Kerstin Baarck"),  # Removed: no longer travel together
 ]
 
 # Partner preferences (enforced for doubles)
