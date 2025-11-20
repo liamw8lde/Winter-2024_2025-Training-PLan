@@ -577,7 +577,7 @@ def select_singles_pair(candidates, df_plan):
     return None
 
 def select_doubles_team(candidates, num_players=4):
-    """Select 4 players for doubles, enforcing partner preferences and rank difference ≤ 3"""
+    """Select 4 players for doubles, enforcing partner preferences and rank difference ≤ 2"""
     legal = [c for c in candidates if not c["has_violations"]]
     if len(legal) < num_players:
         return None
@@ -619,7 +619,7 @@ def select_doubles_team(candidates, num_players=4):
         # If all have valid ranks, check spread
         if len(ranks) == len(test_selected):
             rank_spread = max(ranks) - min(ranks)
-            if rank_spread <= 3:
+            if rank_spread <= 2:
                 selected.append(candidate)
             # else: skip this candidate, try next one
         else:
@@ -632,7 +632,7 @@ def select_doubles_team(candidates, num_players=4):
         ranks = [c["rank"] for c in final_team if c["rank"] != 999]
         if len(ranks) == num_players:  # All have valid ranks
             rank_spread = max(ranks) - min(ranks)
-            if rank_spread > 3:
+            if rank_spread > 2:
                 return None  # Rank spread too large
         return [c["name"] for c in final_team]
 
@@ -990,14 +990,14 @@ def check_plan_violations(df_plan, available_days, preferences, holidays):
                 max_rank = max(valid_ranks)
                 min_rank = min(valid_ranks)
                 rank_spread = max_rank - min_rank
-                if rank_spread > 3:
+                if rank_spread > 2:
                     violations_list.append({
                         "Datum": datum,
                         "Tag": tag,
                         "Slot": slot,
                         "Typ": typ,
                         "Spieler": ", ".join(players),
-                        "Violation": f"Doppel Rang-Differenz zu groß: {max_rank} - {min_rank} = {rank_spread} > 3"
+                        "Violation": f"Doppel Rang-Differenz zu groß: {max_rank} - {min_rank} = {rank_spread} > 2"
                     })
 
     return violations_list
@@ -1523,7 +1523,7 @@ with tab_auto:
                                 rank_info = f"  📊 Rang-Differenz: {diff} {emoji}"
                             elif typ.lower().startswith("doppel") and len(ranks) == 4:
                                 spread = max(ranks) - min(ranks)
-                                emoji = "✅" if spread <= 3 else "❌"
+                                emoji = "✅" if spread <= 2 else "❌"
                                 rank_info = f"  📊 Rang-Spread: {min(ranks)}-{max(ranks)} (Diff: {spread}) {emoji}"
 
                         st.write(f"**{slot['Datum']}** ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
@@ -1956,7 +1956,7 @@ with st.expander("🏆 Spieler-Rankings"):
 
     **Regel für Einzel:** Rang-Differenz zwischen 2 Spielern ≤ 2
 
-    **Regel für Doppel:** Rang-Differenz zwischen stärkster und schwächster Spieler ≤ 3
+    **Regel für Doppel:** Rang-Differenz zwischen stärkster und schwächster Spieler ≤ 2
 
     **Quelle:** `Player_Ranks_2026.csv` (aus audit prompt.txt)
     """)
