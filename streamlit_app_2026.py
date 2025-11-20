@@ -153,7 +153,7 @@ def render_week(df: pd.DataFrame, year: int, week: int, ranks: dict):
             # Parse players
             players = [p.strip() for p in str(r['Spieler']).split(",")]
 
-            # Add rank info for singles
+            # Add rank difference info
             if r['Typ'] == "Einzel" and len(players) == 2:
                 rank1 = ranks.get(players[0], "?")
                 rank2 = ranks.get(players[1], "?")
@@ -161,20 +161,23 @@ def render_week(df: pd.DataFrame, year: int, week: int, ranks: dict):
                 # Calculate rank difference
                 if isinstance(rank1, (int, float)) and isinstance(rank2, (int, float)):
                     diff = abs(rank1 - rank2)
-                    rank_info = f"  📊 Ranks: {players[0]} ({rank1}) vs {players[1]} ({rank2}) — Diff: {diff}"
+                    rank_info = f"  📊 {players[0]} vs {players[1]} — Rank diff: {diff}"
                 else:
-                    rank_info = f"  📊 Ranks: {players[0]} ({rank1}) vs {players[1]} ({rank2})"
+                    rank_info = f"  📊 {players[0]} vs {players[1]} — Rank diff: ?"
 
                 st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*\n{rank_info}")
             else:
-                # For doubles, show ranks but no difference
-                player_ranks = []
+                # For doubles, show players and rank difference between strongest and weakest
+                player_rank_values = []
                 for p in players:
-                    rank = ranks.get(p, "?")
-                    player_ranks.append(f"{p} ({rank})")
+                    rank = ranks.get(p, None)
+                    if isinstance(rank, (int, float)):
+                        player_rank_values.append(rank)
 
-                if len(player_ranks) > 0:
-                    rank_info = f"  📊 {', '.join(player_ranks)}"
+                players_str = ", ".join(players)
+                if len(player_rank_values) >= 2:
+                    diff = max(player_rank_values) - min(player_rank_values)
+                    rank_info = f"  📊 {players_str} — Rank diff: {diff}"
                     st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*\n{rank_info}")
                 else:
                     st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*  \n  {r['Spieler']}")
