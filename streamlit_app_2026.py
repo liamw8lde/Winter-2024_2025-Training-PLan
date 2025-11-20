@@ -161,22 +161,23 @@ def render_week(df: pd.DataFrame, year: int, week: int, ranks: dict):
                 # Calculate rank difference
                 if isinstance(rank1, (int, float)) and isinstance(rank2, (int, float)):
                     diff = abs(rank1 - rank2)
-                    rank_info = f"  📊 Rank-Diff: {diff}"
+                    rank_info = f"  📊 {players[0]} vs {players[1]} — Diff: {diff}"
                 else:
-                    rank_info = "  📊 Rank-Diff: ?"
+                    rank_info = f"  📊 {players[0]} vs {players[1]} — Diff: ?"
 
                 st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*\n{rank_info}")
             else:
-                # For doubles, show rank difference between strongest and weakest
+                # For doubles, show players and rank difference between strongest and weakest
                 player_rank_values = []
                 for p in players:
                     rank = ranks.get(p, None)
                     if isinstance(rank, (int, float)):
                         player_rank_values.append(rank)
 
+                players_str = ", ".join(players)
                 if len(player_rank_values) >= 2:
                     diff = max(player_rank_values) - min(player_rank_values)
-                    rank_info = f"  📊 Rank-Diff: {diff}"
+                    rank_info = f"  📊 {players_str} — Diff: {diff}"
                     st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*\n{rank_info}")
                 else:
                     st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*  \n  {r['Spieler']}")
