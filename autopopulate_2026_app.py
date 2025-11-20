@@ -62,8 +62,8 @@ RANK_FALLBACK = {
 
 WOMEN_SINGLE_BAN = {"Anke Ihde", "Lena Meiss", "Martina Schmidt", "Kerstin Baarck"}
 
-# Women banned from Monday 20:00 doubles (no women in this time slot)
-WOMEN_MONDAY_DOUBLES_BAN = {"Anke Ihde", "Lena Meiss", "Martina Schmidt", "Kerstin Baarck"}
+# Women banned from Monday 20:00 doubles Court A (no women in this time slot)
+WOMEN_MONDAY_DOUBLES_A_BAN = {"Anke Ihde", "Lena Meiss", "Martina Schmidt", "Kerstin Baarck"}
 
 # Paired players - must play at the same time (different courts OK)
 PAIRED_PLAYERS = [
@@ -399,8 +399,16 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
         violations.append(f"{name}: nur Mittwoch 19:00.")
     if typ.lower().startswith("einzel") and name in WOMEN_SINGLE_BAN:
         violations.append(f"{name}: Frauen dürfen kein Einzel spielen.")
-    if tag == "Montag" and s_time == "20:00" and typ.lower().startswith("doppel") and name in WOMEN_MONDAY_DOUBLES_BAN:
-        violations.append(f"{name}: Frauen dürfen nicht am Montag 20:00 Doppel spielen.")
+    # Check for Monday 20:00 doubles Court A ban for women
+    if tag == "Montag" and s_time == "20:00" and typ.lower().startswith("doppel") and name in WOMEN_MONDAY_DOUBLES_A_BAN:
+        # Check if this is Court A (PLA)
+        player_slot = df_after[
+            (df_after["Datum_dt"].dt.date == d) &
+            (df_after["S_Time"] == s_time) &
+            (df_after["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True))
+        ]
+        if not player_slot.empty and "PLA" in player_slot.iloc[-1].get("Slot", ""):
+            violations.append(f"{name}: Frauen dürfen nicht am Montag 20:00 Doppel Platz A spielen.")
 
     # Paired players check - must play at same time (they live together)
     for pair in PAIRED_PLAYERS:
