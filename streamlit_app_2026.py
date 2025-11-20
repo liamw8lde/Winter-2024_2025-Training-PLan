@@ -165,7 +165,7 @@ def render_week(df: pd.DataFrame, year: int, week: int, ranks: dict):
                 else:
                     rank_info = f"  📊 Ranks: {players[0]} ({rank1}) vs {players[1]} ({rank2})"
 
-                st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*  \n  {r['Spieler']}\n{rank_info}")
+                st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*\n{rank_info}")
             else:
                 # For doubles, show ranks but no difference
                 player_ranks = []
