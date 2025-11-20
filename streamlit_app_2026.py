@@ -161,9 +161,9 @@ def render_week(df: pd.DataFrame, year: int, week: int, ranks: dict):
                 # Calculate rank difference
                 if isinstance(rank1, (int, float)) and isinstance(rank2, (int, float)):
                     diff = abs(rank1 - rank2)
-                    rank_info = f"  📊 {players[0]} vs {players[1]} — Diff: {diff}"
+                    rank_info = f"  📊 {players[0]} vs {players[1]} — Rank diff: {diff}"
                 else:
-                    rank_info = f"  📊 {players[0]} vs {players[1]} — Diff: ?"
+                    rank_info = f"  📊 {players[0]} vs {players[1]} — Rank diff: ?"
 
                 st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*\n{rank_info}")
             else:
@@ -177,7 +177,7 @@ def render_week(df: pd.DataFrame, year: int, week: int, ranks: dict):
                 players_str = ", ".join(players)
                 if len(player_rank_values) >= 2:
                     diff = max(player_rank_values) - min(player_rank_values)
-                    rank_info = f"  📊 {players_str} — Diff: {diff}"
+                    rank_info = f"  📊 {players_str} — Rank diff: {diff}"
                     st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*\n{rank_info}")
                 else:
                     st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*  \n  {r['Spieler']}")
