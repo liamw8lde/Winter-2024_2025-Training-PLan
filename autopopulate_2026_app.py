@@ -62,6 +62,9 @@ RANK_FALLBACK = {
 
 WOMEN_SINGLE_BAN = {"Anke Ihde", "Lena Meiss", "Martina Schmidt", "Kerstin Baarck"}
 
+# Women banned from Monday 20:00 doubles (no women in this time slot)
+WOMEN_MONDAY_DOUBLES_BAN = {"Anke Ihde", "Lena Meiss", "Martina Schmidt", "Kerstin Baarck"}
+
 # Paired players - must play at the same time (different courts OK)
 PAIRED_PLAYERS = [
     # ("Lena Meiss", "Kerstin Baarck"),  # Removed: no longer travel together
@@ -396,6 +399,8 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
         violations.append(f"{name}: nur Mittwoch 19:00.")
     if typ.lower().startswith("einzel") and name in WOMEN_SINGLE_BAN:
         violations.append(f"{name}: Frauen dürfen kein Einzel spielen.")
+    if tag == "Montag" and s_time == "20:00" and typ.lower().startswith("doppel") and name in WOMEN_MONDAY_DOUBLES_BAN:
+        violations.append(f"{name}: Frauen dürfen nicht am Montag 20:00 Doppel spielen.")
 
     # Paired players check - must play at same time (they live together)
     for pair in PAIRED_PLAYERS:
