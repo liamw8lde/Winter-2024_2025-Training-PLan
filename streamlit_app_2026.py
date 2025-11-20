@@ -175,7 +175,7 @@ def render_week(df: pd.DataFrame, year: int, week: int, ranks: dict):
 
                 if len(player_ranks) > 0:
                     rank_info = f"  📊 {', '.join(player_ranks)}"
-                    st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*  \n  {r['Spieler']}\n{rank_info}")
+                    st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*\n{rank_info}")
                 else:
                     st.markdown(f"{court_emoji} {type_emoji} **{r['Slot']}** — *{r['Typ']}*  \n  {r['Spieler']}")
 
