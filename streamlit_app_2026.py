@@ -437,7 +437,7 @@ with tab3:
 
         #### 👥 Spieler-spezifische Regeln
         **Paired Players (müssen zur gleichen Zeit spielen):**
-        - Lena Meiss & Kerstin Baarck (wohnen zusammen, fahren gemeinsam)
+        - *(Keine aktiven Paare - Lena Meiss & Kerstin Baarck entfernt: fahren nicht mehr zusammen)*
 
         **Partner Präferenzen (Doppel):**
         - Bjoern Junker + Martin Lange (Fahrgemeinschaft aus Schönkirchen)
@@ -459,7 +459,8 @@ with tab3:
         - Peter Plaehn: max 3 Matches/Monat
 
         **Saison-Limits:**
-        - Torsten Bartel: max 3 Matches/Saison
+        - Torsten Bartel: 0 Matches (spielt diesen Winter nicht mehr)
+        - Patrick Buehrsch: max 6 Matches/Saison
 
         **Saison-Targets (Prioritäts-Boost):**
         - Thomas Grueneberg: Ziel 11 Matches ("Würde gerne einmal pro Woche spielen!")
@@ -472,7 +473,7 @@ with tab3:
         #### ⚡ Priorisierungs-System
         Der Algorithmus verwendet Priority Boosting:
         - **Target Boost:** -100 × (Ziel - aktuelle Matches) für Spieler unter ihrem Ziel
-        - **Paired Boost:** -50 wenn Partner verfügbar ist
+        - **Paired Boost:** -1000 wenn Partner bereits zur gleichen Zeit eingeteilt ist
         - **Ratio Balancing:** Spieler mit weniger Matches bekommen höhere Priorität
         - **Niedrigere Werte = höhere Priorität** (mehr wahrscheinlich ausgewählt zu werden)
 
