@@ -941,7 +941,17 @@ with tab1:
         st.warning("Keine Wochen gefunden.")
     else:
         if "wk_idx" not in st.session_state:
-            st.session_state.wk_idx = len(wk_keys) - 1
+            # Find the week containing today's date
+            today = date.today()
+            today_iso = pd.Timestamp(today).isocalendar()
+            today_week_key = f"{today_iso.year}-W{str(today_iso.week).zfill(2)}"
+
+            # Try to find today's week in the available weeks
+            if today_week_key in wk_keys:
+                st.session_state.wk_idx = wk_keys.index(today_week_key)
+            else:
+                # If today's week is not in the plan, default to the last week
+                st.session_state.wk_idx = len(wk_keys) - 1
         col_prev, col_next = st.columns(2)
         if col_prev.button("◀️ Woche zurück"):
             st.session_state.wk_idx = max(0, st.session_state.wk_idx - 1)
