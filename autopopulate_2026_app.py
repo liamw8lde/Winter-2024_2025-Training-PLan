@@ -730,15 +730,16 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
 
     # Select players - first try with normal rank constraints
     if typ.lower().startswith("einzel"):
+        # Tier 1: Normal constraints
         players = select_singles_pair(filtered, df_plan, max_rank_diff=2, max_singles_repeats=max_singles_repeats)
         if players is not None:
             return players, False
-        # Try with extended rank difference (+1)
-        players = select_singles_pair(filtered, df_plan, max_rank_diff=3, max_singles_repeats=max_singles_repeats)
+        # Tier 2: Try with extended repetitions (+1), keep rank difference tight
+        players = select_singles_pair(filtered, df_plan, max_rank_diff=2, max_singles_repeats=max_singles_repeats + 1)
         if players is not None:
             return players, True
-        # Try with extended repetitions (+1) when match can't be filled
-        players = select_singles_pair(filtered, df_plan, max_rank_diff=3, max_singles_repeats=max_singles_repeats + 1)
+        # Tier 3: Try with extended rank difference (+1)
+        players = select_singles_pair(filtered, df_plan, max_rank_diff=3, max_singles_repeats=max_singles_repeats)
         if players is not None:
             return players, True
         return None, False
