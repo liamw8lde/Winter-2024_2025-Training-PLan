@@ -737,6 +737,10 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
         players = select_singles_pair(filtered, df_plan, max_rank_diff=3, max_singles_repeats=max_singles_repeats)
         if players is not None:
             return players, True
+        # Try with extended repetitions (+1) when match can't be filled
+        players = select_singles_pair(filtered, df_plan, max_rank_diff=3, max_singles_repeats=max_singles_repeats + 1)
+        if players is not None:
+            return players, True
         return None, False
     else:
         players = select_doubles_team(filtered, num_players, max_rank_spread=3)
