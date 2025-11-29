@@ -557,7 +557,7 @@ def can_schedule_paired_partner(name, d, s_time, df_after, available_days, prefe
     return True
 
 # ==================== AUTOPOPULATION ALGORITHM ====================
-def select_singles_pair(candidates, df_plan, max_rank_diff=2):
+def select_singles_pair(candidates, df_plan, max_rank_diff=2, max_singles_repeats=3):
     """Select 2 players for singles with rank difference ≤ max_rank_diff and variety constraint"""
     for i, c1 in enumerate(candidates):
         if c1["has_violations"]:
@@ -570,7 +570,7 @@ def select_singles_pair(candidates, df_plan, max_rank_diff=2):
             if r1 != 999 and r2 != 999 and abs(r1 - r2) <= max_rank_diff:
                 # Check singles variety constraint
                 pairing_count = count_singles_pairing(df_plan, c1["name"], c2["name"])
-                if pairing_count >= MAX_SINGLES_REPEATS:
+                if pairing_count >= max_singles_repeats:
                     # This pairing has occurred too many times, skip it
                     continue
                 return [c1["name"], c2["name"]]
@@ -638,7 +638,7 @@ def select_doubles_team(candidates, num_players=4, max_rank_spread=3):
 
     return None
 
-def select_players_for_slot(df_plan, slot_info, all_players, available_days, preferences, holidays):
+def select_players_for_slot(df_plan, slot_info, all_players, available_days, preferences, holidays, max_singles_repeats=3):
     """Select appropriate players for a slot. Returns (players, used_extended_rank)"""
     datum = slot_info["Datum"]
     tag = slot_info["Tag"]
@@ -730,11 +730,11 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
 
     # Select players - first try with normal rank constraints
     if typ.lower().startswith("einzel"):
-        players = select_singles_pair(filtered, df_plan, max_rank_diff=2)
+        players = select_singles_pair(filtered, df_plan, max_rank_diff=2, max_singles_repeats=max_singles_repeats)
         if players is not None:
             return players, False
         # Try with extended rank difference (+1)
-        players = select_singles_pair(filtered, df_plan, max_rank_diff=3)
+        players = select_singles_pair(filtered, df_plan, max_rank_diff=3, max_singles_repeats=max_singles_repeats)
         if players is not None:
             return players, True
         return None, False
@@ -748,7 +748,7 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
             return players, True
         return None, False
 
-def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_days, preferences, holidays):
+def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_days, preferences, holidays, max_singles_repeats=3):
     """Main autopopulation function"""
     df_result = df_plan.copy()
     empty_slots = find_empty_slots(df_result)
@@ -763,7 +763,7 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
             break
 
         players, used_extended = select_players_for_slot(
-            df_result, slot_info, all_players, available_days, preferences, holidays
+            df_result, slot_info, all_players, available_days, preferences, holidays, max_singles_repeats
         )
 
         if players is None:
@@ -1480,6 +1480,15 @@ with tab_auto:
                 help="Wenn aktiv, werden nur Slots mit 100% regelkonformen Spielern gefüllt"
             )
 
+        # Additional settings
+        max_singles_repeats = st.number_input(
+            "Maximale Wiederholungen Einzel-Paarungen",
+            min_value=1,
+            max_value=10,
+            value=3,
+            help="Wie oft dürfen dieselben zwei Spieler im Einzel gegeneinander antreten?"
+        )
+
         st.markdown("---")
 
         # Actions
@@ -1494,7 +1503,8 @@ with tab_auto:
                         all_players,
                         available_days,
                         preferences,
-                        holidays
+                        holidays,
+                        max_singles_repeats
                     )
                     st.session_state.df_result = df_result
                     st.session_state.filled_slots = filled
