@@ -83,7 +83,7 @@ MONTHLY_LIMITS = {
 # Season match limits (player -> max matches per season)
 SEASON_LIMITS = {
     "Torsten Bartel": 0,  # Not playing this winter anymore
-    "Patrick Buehrsch": 2,  # Max 2 matches for entire 2026 season
+    "Patrick Buehrsch": 0,  # Not playing this winter anymore
 }
 
 # Season match targets (player -> target number of matches)
@@ -372,8 +372,7 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
         violations.append(f"{name}: nicht verfügbar an {tag}.")
 
     # Protected player rules
-    if name == "Patrick Buehrsch" and s_time != "18:00":
-        violations.append(f"{name}: nur 18:00 erlaubt.")
+    # Patrick Buehrsch: Not playing this winter (removed time restriction)
     if name == "Frank Petermann" and s_time not in {"19:00", "20:00"}:
         violations.append(f"{name}: nur 19:00 oder 20:00 erlaubt.")
     if name == "Matthias Duddek" and s_time not in {"18:00", "19:00"}:
