@@ -557,8 +557,8 @@ def can_schedule_paired_partner(name, d, s_time, df_after, available_days, prefe
     return True
 
 # ==================== AUTOPOPULATION ALGORITHM ====================
-def select_singles_pair(candidates, df_plan):
-    """Select 2 players for singles with rank difference ≤ 2 and variety constraint"""
+def select_singles_pair(candidates, df_plan, max_rank_diff=2):
+    """Select 2 players for singles with rank difference ≤ max_rank_diff and variety constraint"""
     for i, c1 in enumerate(candidates):
         if c1["has_violations"]:
             break
@@ -567,7 +567,7 @@ def select_singles_pair(candidates, df_plan):
                 break
             r1 = c1["rank"]
             r2 = c2["rank"]
-            if r1 != 999 and r2 != 999 and abs(r1 - r2) <= 2:
+            if r1 != 999 and r2 != 999 and abs(r1 - r2) <= max_rank_diff:
                 # Check singles variety constraint
                 pairing_count = count_singles_pairing(df_plan, c1["name"], c2["name"])
                 if pairing_count >= MAX_SINGLES_REPEATS:
@@ -576,8 +576,8 @@ def select_singles_pair(candidates, df_plan):
                 return [c1["name"], c2["name"]]
     return None
 
-def select_doubles_team(candidates, num_players=4):
-    """Select 4 players for doubles, enforcing partner preferences and rank difference ≤ 3"""
+def select_doubles_team(candidates, num_players=4, max_rank_spread=3):
+    """Select 4 players for doubles, enforcing partner preferences and rank difference ≤ max_rank_spread"""
     legal = [c for c in candidates if not c["has_violations"]]
     if len(legal) < num_players:
         return None
@@ -608,7 +608,7 @@ def select_doubles_team(candidates, num_players=4):
                     break
 
     # Second pass: fill remaining slots from the pool
-    # Try to build a team with rank spread ≤ 3
+    # Try to build a team with rank spread ≤ max_rank_spread
     while len(selected) < num_players and remaining:
         candidate = remaining.pop(0)
 
@@ -619,7 +619,7 @@ def select_doubles_team(candidates, num_players=4):
         # If all have valid ranks, check spread
         if len(ranks) == len(test_selected):
             rank_spread = max(ranks) - min(ranks)
-            if rank_spread <= 3:
+            if rank_spread <= max_rank_spread:
                 selected.append(candidate)
             # else: skip this candidate, try next one
         else:
@@ -632,14 +632,14 @@ def select_doubles_team(candidates, num_players=4):
         ranks = [c["rank"] for c in final_team if c["rank"] != 999]
         if len(ranks) == num_players:  # All have valid ranks
             rank_spread = max(ranks) - min(ranks)
-            if rank_spread > 3:
+            if rank_spread > max_rank_spread:
                 return None  # Rank spread too large
         return [c["name"] for c in final_team]
 
     return None
 
 def select_players_for_slot(df_plan, slot_info, all_players, available_days, preferences, holidays):
-    """Select appropriate players for a slot"""
+    """Select appropriate players for a slot. Returns (players, used_extended_rank)"""
     datum = slot_info["Datum"]
     tag = slot_info["Tag"]
     slot_code = slot_info["Slot"]
@@ -728,11 +728,25 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
     # Prioritize players with fewer matches for better balance
     filtered.sort(key=lambda x: (x["has_violations"], x["paired_boost"], x["target_boost"], x["season"], x["week"], x["rank"], x["name"]))
 
-    # Select players
+    # Select players - first try with normal rank constraints
     if typ.lower().startswith("einzel"):
-        return select_singles_pair(filtered, df_plan)
+        players = select_singles_pair(filtered, df_plan, max_rank_diff=2)
+        if players is not None:
+            return players, False
+        # Try with extended rank difference (+1)
+        players = select_singles_pair(filtered, df_plan, max_rank_diff=3)
+        if players is not None:
+            return players, True
+        return None, False
     else:
-        return select_doubles_team(filtered, num_players)
+        players = select_doubles_team(filtered, num_players, max_rank_spread=3)
+        if players is not None:
+            return players, False
+        # Try with extended rank spread (+1)
+        players = select_doubles_team(filtered, num_players, max_rank_spread=4)
+        if players is not None:
+            return players, True
+        return None, False
 
 def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_days, preferences, holidays):
     """Main autopopulation function"""
@@ -742,12 +756,13 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
     filled_count = 0
     filled_slots = []
     skipped_slots = []
+    extended_rank_slots = []  # Track slots that used extended rank difference
 
     for slot_info in empty_slots:
         if max_slots and filled_count >= max_slots:
             break
 
-        players = select_players_for_slot(
+        players, used_extended = select_players_for_slot(
             df_result, slot_info, all_players, available_days, preferences, holidays
         )
 
@@ -784,6 +799,10 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
         filled_count += 1
         filled_slots.append({**slot_info, "players": players})
 
+        # Track if this slot used extended rank difference
+        if used_extended:
+            extended_rank_slots.append({**slot_info, "players": players})
+
         # Check if any of the players just scheduled are part of a paired group
         # If yes, try to schedule their partner at the same time
         time_match = re.search(r"(\d{2}:\d{2})", slot_info["Slot"])
@@ -812,7 +831,7 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
 
                                     if next_slot_time == slot_time:
                                         # Try to schedule the partner in this slot
-                                        next_players = select_players_for_slot(
+                                        next_players, next_used_extended = select_players_for_slot(
                                             df_result, next_slot, all_players, available_days, preferences, holidays
                                         )
 
@@ -838,9 +857,13 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
                                                     df_result, _ = postprocess_plan(df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]])
                                                     filled_count += 1
                                                     filled_slots.append({**next_slot, "players": next_players})
+
+                                                    # Track extended rank for partner slot
+                                                    if next_used_extended:
+                                                        extended_rank_slots.append({**next_slot, "players": next_players})
                                                     break
 
-    return df_result, filled_slots, skipped_slots
+    return df_result, filled_slots, skipped_slots, extended_rank_slots
 
 # ==================== GITHUB FUNCTIONS ====================
 def github_headers():
@@ -1464,7 +1487,7 @@ with tab_auto:
         with col_preview:
             if st.button("🔍 Vorschau generieren", width='stretch', type="primary"):
                 with st.spinner("Generiere Auto-Population für 2026..."):
-                    df_result, filled, skipped = autopopulate_plan(
+                    df_result, filled, skipped, extended_rank = autopopulate_plan(
                         st.session_state.df_work,
                         max_slots,
                         only_legal,
@@ -1476,6 +1499,7 @@ with tab_auto:
                     st.session_state.df_result = df_result
                     st.session_state.filled_slots = filled
                     st.session_state.skipped_slots = skipped
+                    st.session_state.extended_rank_slots = extended_rank
                     st.rerun()
 
         with col_reset:
@@ -1484,6 +1508,7 @@ with tab_auto:
                 st.session_state.pop("df_result", None)
                 st.session_state.pop("filled_slots", None)
                 st.session_state.pop("skipped_slots", None)
+                st.session_state.pop("extended_rank_slots", None)
                 st.rerun()
 
         # Show results if available
@@ -1493,13 +1518,17 @@ with tab_auto:
 
             filled = st.session_state.get("filled_slots", [])
             skipped = st.session_state.get("skipped_slots", [])
+            extended_rank = st.session_state.get("extended_rank_slots", [])
 
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.success(f"**{len(filled)}** Slots erfolgreich gefüllt")
             with col2:
                 if skipped:
                     st.warning(f"**{len(skipped)}** Slots übersprungen")
+            with col3:
+                if extended_rank:
+                    st.info(f"**{len(extended_rank)}** mit erweiterter Rang-Differenz")
 
             # Filled slots details
             if filled:
@@ -1537,6 +1566,38 @@ with tab_auto:
                 with st.expander(f"⚠️ Übersprungene Slots ({len(skipped)})"):
                     for slot in skipped:
                         st.write(f"• {slot['Datum']} ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
+
+            # Extended rank difference slots
+            if extended_rank:
+                with st.expander(f"📏 Slots mit erweiterter Rang-Differenz ({len(extended_rank)})", expanded=True):
+                    st.info("ℹ️ Diese Slots konnten nur durch Erhöhung der Rang-Differenz um +1 gefüllt werden (Einzel: Rang-Diff ≤3 statt ≤2, Doppel: Rang-Spread ≤4 statt ≤3)")
+                    for slot in extended_rank:
+                        players = slot["players"]
+                        typ = slot["Typ"]
+
+                        # Get player rankings
+                        player_ranks = [(p, RANK.get(p, "?")) for p in players]
+                        players_with_ranks = [f"{p} (Rang {r})" for p, r in player_ranks]
+                        players_str = ", ".join(players_with_ranks)
+
+                        # Calculate rank difference/spread
+                        ranks = [r for p, r in player_ranks if r != "?"]
+                        rank_info = ""
+                        if len(ranks) == len(players):  # All have valid ranks
+                            if typ.lower().startswith("einzel") and len(ranks) == 2:
+                                diff = abs(ranks[0] - ranks[1])
+                                emoji = "⚠️" if diff == 3 else "❌"
+                                rank_info = f"  📊 Rang-Differenz: {diff} {emoji}"
+                            elif typ.lower().startswith("doppel") and len(ranks) == 4:
+                                spread = max(ranks) - min(ranks)
+                                emoji = "⚠️" if spread == 4 else "❌"
+                                rank_info = f"  📊 Rang-Spread: {min(ranks)}-{max(ranks)} (Diff: {spread}) {emoji}"
+
+                        st.write(f"**{slot['Datum']}** ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
+                        st.write(f"  → {players_str}")
+                        if rank_info:
+                            st.write(rank_info)
+                        st.write("")
 
             # Statistics
             st.markdown("---")
@@ -1599,6 +1660,7 @@ with tab_auto:
                     st.session_state.pop("df_result", None)
                     st.session_state.pop("filled_slots", None)
                     st.session_state.pop("skipped_slots", None)
+                    st.session_state.pop("extended_rank_slots", None)
                     st.rerun()
 
     else:
