@@ -84,6 +84,8 @@ MONTHLY_LIMITS = {
 SEASON_LIMITS = {
     "Torsten Bartel": 0,  # Not playing this winter anymore
     "Patrick Buehrsch": 0,  # Not playing this winter anymore
+    "Mohamad Albadry": 0,  # Not playing this winter anymore
+    "Torben Sjuts": 0,  # Not playing this winter anymore
 }
 
 # Season match targets (player -> target number of matches)
@@ -313,6 +315,14 @@ def count_18_19(df_plan, name):
     )
     return int(mask.sum())
 
+def count_singles(df_plan, name):
+    """Count singles matches for a player"""
+    mask = (
+        (df_plan["Typ"].str.lower().str.startswith("einzel")) &
+        (df_plan["Spieler"].str.contains(fr"\b{re.escape(name)}\b", regex=True))
+    )
+    return int(mask.sum())
+
 def count_singles_pairing(df_plan, name1, name2):
     """Count how many times two players have played singles together"""
     # Filter for singles matches only
@@ -394,6 +404,17 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
                 violations.append(f"{name}: Anteil Mi 20:00 > 30%.")
             if early_after / total_after < 0.70:
                 violations.append(f"{name}: Anteil 18/19 < 70%.")
+    if name == "Heiko Thomsen":
+        total_after = count_season(df_after, name)
+        singles_after = count_singles(df_after, name)
+        # Only enforce percentage rules after 4+ matches to avoid chicken-egg problem
+        if total_after >= 4:
+            singles_ratio = singles_after / total_after
+            # Allow 40-60% range for 50% target
+            if singles_ratio < 0.40:
+                violations.append(f"{name}: Anteil Einzel < 40% (Ziel: 50%).")
+            if singles_ratio > 0.60:
+                violations.append(f"{name}: Anteil Einzel > 60% (Ziel: 50%).")
     if name == "Jens Hafner" and not (tag == "Mittwoch" and s_time == "19:00"):
         violations.append(f"{name}: nur Mittwoch 19:00.")
     if typ.lower().startswith("einzel") and name in WOMEN_SINGLE_BAN:
