@@ -249,8 +249,7 @@ with tab1:
     selected_week = st.selectbox(
         "Woche auswählen:",
         options=week_options,
-        index=current_idx,
-        key="week_selector"
+        index=current_idx
     )
 
     # Update session state when selectbox changes
