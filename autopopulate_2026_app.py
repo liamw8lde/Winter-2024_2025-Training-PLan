@@ -84,6 +84,8 @@ MONTHLY_LIMITS = {
 SEASON_LIMITS = {
     "Torsten Bartel": 0,  # Not playing this winter anymore
     "Patrick Buehrsch": 0,  # Not playing this winter anymore
+    "Mohamad Albadry": 0,  # Not playing this winter anymore
+    "Torben Sjuts": 0,  # Not playing this winter anymore
 }
 
 # Season match targets (player -> target number of matches)
