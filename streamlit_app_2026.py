@@ -230,12 +230,32 @@ with tab1:
 
     week_options = [f"{int(row['Jahr'])}-W{int(row['Woche']):02d}" for _, row in weeks.iterrows()]
 
-    # Week selector
+    # Initialize with current week on first load
+    if "week_selection" not in st.session_state:
+        # Get current week
+        today = datetime.now()
+        current_iso = today.isocalendar()
+        current_week_str = f"{current_iso.year}-W{current_iso.week:02d}"
+
+        # Use current week if it exists in data, otherwise use first week
+        if current_week_str in week_options:
+            st.session_state.week_selection = current_week_str
+        else:
+            st.session_state.week_selection = week_options[0]
+
+    # Week selector - use session state
+    current_idx = week_options.index(st.session_state.week_selection) if st.session_state.week_selection in week_options else 0
+
     selected_week = st.selectbox(
         "Woche auswählen:",
         options=week_options,
-        index=0
+        index=current_idx,
+        key="week_selector"
     )
+
+    # Update session state when selectbox changes
+    if selected_week != st.session_state.week_selection:
+        st.session_state.week_selection = selected_week
 
     # Parse selected week
     match = re.match(r"(\d{4})-W(\d{2})", selected_week)
@@ -246,7 +266,6 @@ with tab1:
 
     # Navigation buttons
     col1, col2, col3 = st.columns([1, 2, 1])
-    current_idx = week_options.index(selected_week) if selected_week in week_options else 0
 
     with col1:
         if current_idx > 0 and st.button("⬅️ Vorherige Woche"):
