@@ -1,7 +1,6 @@
 Spieler,ValidFrom,ValidTo,AvailableDays,Preference,BlockedRanges,BlockedDays,Notes,Timestamp
 Patrick Buehrsch,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,,,,2025-10-27T19:40:11Z
 Thomas Grueneberg,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,,,Würde gerne einmal pro Woche spielen! ,2025-11-05 17:54:54
-Liam Wilde,2026-01-01,2026-04-26,Montag;Donnerstag;Mittwoch,nur Einzel,,,,2025-11-05 19:40:45
 Jens Hafner,2026-01-01,2026-04-26,Montag;Mittwoch,keine Präferenz,,,"Mittwochs bitte nur Einzel um 19.00 Uhr, da von 18.00 bis 19.00 Uhr Training bei Jana.",2025-11-05 19:44:15
 Manfred Grell,2026-01-01,2026-04-26,Mittwoch;Donnerstag,keine Präferenz,2026-01-01→2026-01-04;2026-01-23→2026-02-08;2026-03-02→2026-03-08,,,2025-11-05 19:44:26
 Lorenz Kramp,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,nur Einzel,,2026-01-15;2026-01-22;2026-02-12;2026-02-19;2026-03-12;2026-03-26;2026-04-02;2026-04-23,,2025-11-05 19:54:32
@@ -45,3 +44,4 @@ Joerg Peters,2026-01-01,2026-04-26,Mittwoch,nur Einzel,,,,2025-11-19 20:52:45
 Andreas Dank,2026-01-01,2026-04-26,Montag;Mittwoch;Donnerstag,keine Präferenz,,,"Bitte plane mich  mindesten 1 mal pro Woche zum  spielen ein. 
 Bitte nicht nur Doppel. (Hatte bisher nur Doppel) . 
 Spielbeginn darf auch gerne mal vor 20:00Uhr sein",2025-11-22 08:00:29
+Liam Wilde,2026-01-01,2026-04-26,Montag;Donnerstag;Mittwoch,nur Einzel,2026-03-07→2026-03-14;2026-03-26→2026-04-06,,,2025-12-07 09:08:31
