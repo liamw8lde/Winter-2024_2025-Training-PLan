@@ -257,25 +257,28 @@ with tab1:
     if selected_week != st.session_state.week_selection:
         st.session_state.week_selection = selected_week
 
+    # Navigation buttons - directly under dropdown
+    # Recalculate index based on currently selected week
+    selected_idx = week_options.index(selected_week) if selected_week in week_options else 0
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col1:
+        if selected_idx > 0 and st.button("⬅️ Vorherige Woche"):
+            st.session_state.week_selection = week_options[selected_idx - 1]
+            st.rerun()
+
+    with col3:
+        if selected_idx < len(week_options) - 1 and st.button("➡️ Nächste Woche"):
+            st.session_state.week_selection = week_options[selected_idx + 1]
+            st.rerun()
+
     # Parse selected week
     match = re.match(r"(\d{4})-W(\d{2})", selected_week)
     if match:
         year = int(match.group(1))
         week = int(match.group(2))
         render_week(df_plan, year, week, player_ranks)
-
-    # Navigation buttons
-    col1, col2, col3 = st.columns([1, 2, 1])
-
-    with col1:
-        if current_idx > 0 and st.button("⬅️ Vorherige Woche"):
-            st.session_state.week_selection = week_options[current_idx - 1]
-            st.rerun()
-
-    with col3:
-        if current_idx < len(week_options) - 1 and st.button("➡️ Nächste Woche"):
-            st.session_state.week_selection = week_options[current_idx + 1]
-            st.rerun()
 
 # ==================== TAB 2: SPIELER-MATCHES ====================
 with tab2:
