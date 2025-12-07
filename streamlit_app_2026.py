@@ -314,7 +314,7 @@ with tab2:
 
                 st.dataframe(
                     display_matches,
-                    use_container_width=True,
+                    width='stretch',
                     height=400,
                     hide_index=True
                 )
@@ -368,13 +368,13 @@ with tab3:
         top_10 = player_counts.head(10).reset_index()
         top_10.columns = ["Spieler", "Matches"]
         top_10.index = range(1, 11)
-        st.dataframe(top_10, use_container_width=True)
+        st.dataframe(top_10, width='stretch')
 
         # Players with fewest matches
         st.subheader("Spieler mit wenigsten Matches")
         bottom_10 = player_counts.tail(10).sort_values().reset_index()
         bottom_10.columns = ["Spieler", "Matches"]
-        st.dataframe(bottom_10, use_container_width=True, hide_index=True)
+        st.dataframe(bottom_10, width='stretch', hide_index=True)
     else:
         st.warning("⚠️ Keine Daten verfügbar für Statistiken.")
 
