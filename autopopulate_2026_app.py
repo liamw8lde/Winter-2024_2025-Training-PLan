@@ -759,7 +759,7 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
         # Tier 2: Try with extended repetitions (+1), keep rank difference tight
         players = select_singles_pair(filtered, df_plan, max_rank_diff=2, max_singles_repeats=max_singles_repeats + 1)
         if players is not None:
-            return players, True
+            return players, False  # Not extended rank, just extended repetitions
         # Tier 3: Try with extended rank difference (+1)
         players = select_singles_pair(filtered, df_plan, max_rank_diff=3, max_singles_repeats=max_singles_repeats)
         if players is not None:
