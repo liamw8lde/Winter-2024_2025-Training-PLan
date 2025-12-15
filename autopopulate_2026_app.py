@@ -403,8 +403,8 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
         early_after = count_18_19(df_after, name)
         # Only enforce percentage rules after 5+ matches to avoid chicken-egg problem
         if total_after >= 5:
-            if early_after / total_after < 0.70:
-                violations.append(f"{name}: Anteil 18/19 < 70%.")
+            if early_after / total_after < 0.50:
+                violations.append(f"{name}: Anteil 18/19 < 50%.")
     if name == "Heiko Thomsen":
         total_after = count_season(df_after, name)
         singles_after = count_singles(df_after, name)
