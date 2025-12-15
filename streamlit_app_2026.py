@@ -596,6 +596,36 @@ with tab4:
             mime="text/csv"
         )
 
+        # WhatsApp copy section
+        st.markdown("---")
+        st.subheader("📱 WhatsApp Text (zum Kopieren)")
+
+        # Build WhatsApp-friendly text
+        whatsapp_lines = ["🎾 *Wintertraining 2026 - Kostenabrechnung*", ""]
+        whatsapp_lines.append(f"📊 *Zusammenfassung:*")
+        whatsapp_lines.append(f"• Direkte Kosten: {totals['direct_cost_total']:.2f} €")
+        whatsapp_lines.append(f"• Ungenutzte Plätze: {totals['unused_cost_total']:.2f} €")
+        whatsapp_lines.append(f"• Gesamt: {totals['charged_total']:.2f} €")
+        whatsapp_lines.append("")
+        whatsapp_lines.append("💰 *Kosten pro Spieler:*")
+
+        # Sort by name for WhatsApp message
+        sorted_players = per_player_df.sort_values("Spieler")
+        for _, row in sorted_players.iterrows():
+            whatsapp_lines.append(f"• {row['Spieler']}: {row['Gesamt (€)']:.2f} €")
+
+        whatsapp_lines.append("")
+        whatsapp_lines.append("_Bitte überweisen auf das Vereinskonto._")
+
+        whatsapp_text = "\n".join(whatsapp_lines)
+
+        st.text_area(
+            "Text kopieren und in WhatsApp einfügen:",
+            value=whatsapp_text,
+            height=400,
+            help="Markiere den gesamten Text und kopiere ihn (Strg+A, Strg+C)"
+        )
+
         with st.expander("📋 Details: Kalender der erlaubten Slots (genutzt/ungenutzt)"):
             if isinstance(allowed_calendar, pd.DataFrame) and not allowed_calendar.empty:
                 show_df = allowed_calendar.copy()
