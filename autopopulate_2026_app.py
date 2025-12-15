@@ -80,7 +80,10 @@ MONTHLY_LIMITS = {
     "Peter Plaehn": 3,  # "2-3 X im Monat" -> max 3
 }
 
-# Season match limits (player -> max matches per season)
+# Default season match limit for ALL players
+SEASON_MAX_MATCHES = 13
+
+# Season match limits (player -> max matches per season, overrides default)
 SEASON_LIMITS = {
     "Torsten Bartel": 0,  # Not playing this winter anymore
     "Patrick Buehrsch": 0,  # Not playing this winter anymore
@@ -342,7 +345,7 @@ def count_singles_pairing(df_plan, name1, name2):
 
     return count
 
-def check_violations(name, tag, s_time, typ, df_after, d, available_days, preferences, holidays):
+def check_violations(name, tag, s_time, typ, df_after, d, available_days, preferences, holidays, season_max_matches=SEASON_MAX_MATCHES):
     """Check all violations for a player assignment"""
     violations = []
 
@@ -459,12 +462,11 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
         if month_count >= max_monthly:
             violations.append(f"{name}: max {max_monthly}/Monat überschritten ({month_count} bereits geplant).")
 
-    # Season match limits
-    if name in SEASON_LIMITS:
-        max_season = SEASON_LIMITS[name]
-        season_count = count_season(df_after, name)
-        if season_count >= max_season:
-            violations.append(f"{name}: max {max_season}/Saison überschritten ({season_count} bereits geplant).")
+    # Season match limits - use player-specific override from SEASON_LIMITS, or default season_max_matches
+    max_season = SEASON_LIMITS.get(name, season_max_matches)
+    season_count = count_season(df_after, name)
+    if season_count >= max_season:
+        violations.append(f"{name}: max {max_season}/Saison überschritten ({season_count} bereits geplant).")
 
     # Type preferences
     pref = preferences.get(name, "keine Präferenz")
@@ -658,7 +660,7 @@ def select_doubles_team(candidates, num_players=4, max_rank_spread=3):
 
     return None
 
-def select_players_for_slot(df_plan, slot_info, all_players, available_days, preferences, holidays, max_singles_repeats=3):
+def select_players_for_slot(df_plan, slot_info, all_players, available_days, preferences, holidays, max_singles_repeats=3, season_max_matches=SEASON_MAX_MATCHES):
     """Select appropriate players for a slot. Returns (players, used_extended_rank)"""
     datum = slot_info["Datum"]
     tag = slot_info["Tag"]
@@ -719,7 +721,7 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
         }])
         df_virtual = pd.concat([df_plan, virtual], ignore_index=True)
 
-        viol = check_violations(name, tag, slot_time, typ, df_virtual, datum, available_days, preferences, holidays)
+        viol = check_violations(name, tag, slot_time, typ, df_virtual, datum, available_days, preferences, holidays, season_max_matches)
 
         candidates.append({
             "name": name,
@@ -773,7 +775,7 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
             return players, True
         return None, False
 
-def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_days, preferences, holidays, max_singles_repeats=3):
+def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_days, preferences, holidays, max_singles_repeats=3, season_max_matches=SEASON_MAX_MATCHES):
     """Main autopopulation function"""
     df_result = df_plan.copy()
     empty_slots = find_empty_slots(df_result)
@@ -788,7 +790,7 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
             break
 
         players, used_extended = select_players_for_slot(
-            df_result, slot_info, all_players, available_days, preferences, holidays, max_singles_repeats
+            df_result, slot_info, all_players, available_days, preferences, holidays, max_singles_repeats, season_max_matches
         )
 
         if players is None:
@@ -802,7 +804,7 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
 
             has_violations = any(
                 check_violations(p, slot_info["Tag"], slot_time, slot_info["Typ"],
-                               df_result, slot_info["Datum"], available_days, preferences, holidays)
+                               df_result, slot_info["Datum"], available_days, preferences, holidays, season_max_matches)
                 for p in players
             )
             if has_violations:
@@ -857,7 +859,7 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
                                     if next_slot_time == slot_time:
                                         # Try to schedule the partner in this slot
                                         next_players, next_used_extended = select_players_for_slot(
-                                            df_result, next_slot, all_players, available_days, preferences, holidays
+                                            df_result, next_slot, all_players, available_days, preferences, holidays, max_singles_repeats, season_max_matches
                                         )
 
                                         # Check if partner is in the selected players
@@ -866,7 +868,7 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
                                             if only_legal:
                                                 has_violations = any(
                                                     check_violations(p, next_slot["Tag"], next_slot_time, next_slot["Typ"],
-                                                                   df_result, next_slot["Datum"], available_days, preferences, holidays)
+                                                                   df_result, next_slot["Datum"], available_days, preferences, holidays, season_max_matches)
                                                     for p in next_players
                                                 )
                                                 if not has_violations:
@@ -1506,13 +1508,23 @@ with tab_auto:
             )
 
         # Additional settings
-        max_singles_repeats = st.number_input(
-            "Maximale Wiederholungen Einzel-Paarungen",
-            min_value=1,
-            max_value=10,
-            value=3,
-            help="Wie oft dürfen dieselben zwei Spieler im Einzel gegeneinander antreten?"
-        )
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            max_singles_repeats = st.number_input(
+                "Maximale Wiederholungen Einzel-Paarungen",
+                min_value=1,
+                max_value=10,
+                value=3,
+                help="Wie oft dürfen dieselben zwei Spieler im Einzel gegeneinander antreten?"
+            )
+        with col_s2:
+            season_max_matches = st.number_input(
+                "Maximale Spiele pro Spieler (Saison)",
+                min_value=1,
+                max_value=30,
+                value=SEASON_MAX_MATCHES,
+                help="Maximale Anzahl Spiele pro Spieler für die gesamte Saison (Standard: 13)"
+            )
 
         st.markdown("---")
 
@@ -1529,7 +1541,8 @@ with tab_auto:
                         available_days,
                         preferences,
                         holidays,
-                        max_singles_repeats
+                        max_singles_repeats,
+                        season_max_matches
                     )
                     st.session_state.df_result = df_result
                     st.session_state.filled_slots = filled
