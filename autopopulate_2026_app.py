@@ -411,11 +411,11 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
         # Only enforce percentage rules after 4+ matches to avoid chicken-egg problem
         if total_after >= 4:
             singles_ratio = singles_after / total_after
-            # Allow 40-60% range for 50% target
-            if singles_ratio < 0.40:
-                violations.append(f"{name}: Anteil Einzel < 40% (Ziel: 50%).")
-            if singles_ratio > 0.60:
-                violations.append(f"{name}: Anteil Einzel > 60% (Ziel: 50%).")
+            # Allow 25-75% range for 50% target (wider range to avoid deadlock)
+            if singles_ratio < 0.25:
+                violations.append(f"{name}: Anteil Einzel < 25% (Ziel: 50%).")
+            if singles_ratio > 0.75:
+                violations.append(f"{name}: Anteil Einzel > 75% (Ziel: 50%).")
     if name == "Jens Hafner" and not (tag == "Mittwoch" and s_time == "19:00"):
         violations.append(f"{name}: nur Mittwoch 19:00.")
     if typ.lower().startswith("einzel") and name in WOMEN_SINGLE_BAN:
