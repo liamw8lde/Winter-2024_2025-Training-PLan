@@ -746,7 +746,7 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
     # Prioritize players with fewer matches for better balance
     filtered.sort(key=lambda x: (x["has_violations"], x["paired_boost"], x["target_boost"], x["season"], x["week"], x["rank"], x["name"]))
 
-    # Select players - first try with normal rank constraints
+    # Select players - try with normal rank constraints only (no rank fallback)
     if typ.lower().startswith("einzel"):
         # Tier 1: Normal constraints
         players = select_singles_pair(filtered, df_plan, max_rank_diff=2, max_singles_repeats=max_singles_repeats)
@@ -756,19 +756,11 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
         players = select_singles_pair(filtered, df_plan, max_rank_diff=2, max_singles_repeats=max_singles_repeats + 1)
         if players is not None:
             return players, False  # Not extended rank, just extended repetitions
-        # Tier 3: Try with extended rank difference (+1)
-        players = select_singles_pair(filtered, df_plan, max_rank_diff=3, max_singles_repeats=max_singles_repeats)
-        if players is not None:
-            return players, True
         return None, False
     else:
         players = select_doubles_team(filtered, num_players, max_rank_spread=3)
         if players is not None:
             return players, False
-        # Try with extended rank spread (+1)
-        players = select_doubles_team(filtered, num_players, max_rank_spread=4)
-        if players is not None:
-            return players, True
         return None, False
 
 def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_days, preferences, holidays, max_singles_repeats=3, season_max_matches=SEASON_MAX_MATCHES):
@@ -779,7 +771,6 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
     filled_count = 0
     filled_slots = []
     skipped_slots = []
-    extended_rank_slots = []  # Track slots that used extended rank difference
     twice_weekly_slots = []  # Track slots that used twice-weekly fallback
 
     for slot_info in empty_slots:
@@ -822,10 +813,6 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
 
         filled_count += 1
         filled_slots.append({**slot_info, "players": players})
-
-        # Track if this slot used extended rank difference
-        if used_extended:
-            extended_rank_slots.append({**slot_info, "players": players})
 
         # Check if any of the players just scheduled are part of a paired group
         # If yes, try to schedule their partner at the same time
@@ -881,10 +868,6 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
                                                     df_result, _ = postprocess_plan(df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]])
                                                     filled_count += 1
                                                     filled_slots.append({**next_slot, "players": next_players})
-
-                                                    # Track extended rank for partner slot
-                                                    if next_used_extended:
-                                                        extended_rank_slots.append({**next_slot, "players": next_players})
                                                     break
 
     # Second pass: retry skipped slots with twice-weekly fallback
@@ -938,14 +921,10 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
         # Track this slot as using twice-weekly fallback
         twice_weekly_slots.append({**slot_info, "players": players})
 
-        # Track if this slot also used extended rank difference
-        if used_extended:
-            extended_rank_slots.append({**slot_info, "players": players})
-
     # Update skipped_slots to only include truly unfillable slots
     skipped_slots = still_skipped
 
-    return df_result, filled_slots, skipped_slots, extended_rank_slots, twice_weekly_slots
+    return df_result, filled_slots, skipped_slots, twice_weekly_slots
 
 # ==================== GITHUB FUNCTIONS ====================
 def github_headers():
@@ -1588,7 +1567,7 @@ with tab_auto:
         with col_preview:
             if st.button("🔍 Vorschau generieren", width='stretch', type="primary"):
                 with st.spinner("Generiere Auto-Population für 2026..."):
-                    df_result, filled, skipped, extended_rank, twice_weekly = autopopulate_plan(
+                    df_result, filled, skipped, twice_weekly = autopopulate_plan(
                         st.session_state.df_work,
                         max_slots,
                         only_legal,
@@ -1602,7 +1581,6 @@ with tab_auto:
                     st.session_state.df_result = df_result
                     st.session_state.filled_slots = filled
                     st.session_state.skipped_slots = skipped
-                    st.session_state.extended_rank_slots = extended_rank
                     st.session_state.twice_weekly_slots = twice_weekly
                     st.rerun()
 
@@ -1612,7 +1590,6 @@ with tab_auto:
                 st.session_state.pop("df_result", None)
                 st.session_state.pop("filled_slots", None)
                 st.session_state.pop("skipped_slots", None)
-                st.session_state.pop("extended_rank_slots", None)
                 st.session_state.pop("twice_weekly_slots", None)
                 st.rerun()
 
@@ -1623,19 +1600,15 @@ with tab_auto:
 
             filled = st.session_state.get("filled_slots", [])
             skipped = st.session_state.get("skipped_slots", [])
-            extended_rank = st.session_state.get("extended_rank_slots", [])
             twice_weekly = st.session_state.get("twice_weekly_slots", [])
 
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.success(f"**{len(filled)}** Slots erfolgreich gefüllt")
             with col2:
                 if skipped:
                     st.warning(f"**{len(skipped)}** Slots übersprungen")
             with col3:
-                if extended_rank:
-                    st.info(f"**{len(extended_rank)}** mit erweiterter Rang-Differenz")
-            with col4:
                 if twice_weekly:
                     st.info(f"**{len(twice_weekly)}** mit 2x/Woche Fallback")
 
@@ -1675,38 +1648,6 @@ with tab_auto:
                 with st.expander(f"⚠️ Übersprungene Slots ({len(skipped)})"):
                     for slot in skipped:
                         st.write(f"• {slot['Datum']} ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
-
-            # Extended rank difference slots
-            if extended_rank:
-                with st.expander(f"📏 Slots mit erweiterter Rang-Differenz ({len(extended_rank)})", expanded=True):
-                    st.info("ℹ️ Diese Slots konnten nur durch Erhöhung der Rang-Differenz um +1 gefüllt werden (Einzel: Rang-Diff ≤3 statt ≤2, Doppel: Rang-Spread ≤4 statt ≤3)")
-                    for slot in extended_rank:
-                        players = slot["players"]
-                        typ = slot["Typ"]
-
-                        # Get player rankings
-                        player_ranks = [(p, RANK.get(p, "?")) for p in players]
-                        players_with_ranks = [f"{p} (Rang {r})" for p, r in player_ranks]
-                        players_str = ", ".join(players_with_ranks)
-
-                        # Calculate rank difference/spread
-                        ranks = [r for p, r in player_ranks if r != "?"]
-                        rank_info = ""
-                        if len(ranks) == len(players):  # All have valid ranks
-                            if typ.lower().startswith("einzel") and len(ranks) == 2:
-                                diff = abs(ranks[0] - ranks[1])
-                                emoji = "⚠️" if diff == 3 else "❌"
-                                rank_info = f"  📊 Rang-Differenz: {diff} {emoji}"
-                            elif typ.lower().startswith("doppel") and len(ranks) == 4:
-                                spread = max(ranks) - min(ranks)
-                                emoji = "⚠️" if spread == 4 else "❌"
-                                rank_info = f"  📊 Rang-Spread: {min(ranks)}-{max(ranks)} (Diff: {spread}) {emoji}"
-
-                        st.write(f"**{slot['Datum']}** ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
-                        st.write(f"  → {players_str}")
-                        if rank_info:
-                            st.write(rank_info)
-                        st.write("")
 
             # Twice-weekly fallback slots
             if twice_weekly:
