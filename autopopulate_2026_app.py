@@ -95,6 +95,7 @@ SEASON_LIMITS = {
 # Players below their target get priority boost
 SEASON_TARGETS = {
     "Thomas Grueneberg": 11,  # "Würde gerne einmal pro Woche spielen!"
+    "Heiko Thomsen": 8,  # Minimum 8 matches per season
 }
 
 # Singles variety constraint - max times same pairing can occur
