@@ -346,8 +346,12 @@ def count_singles_pairing(df_plan, name1, name2):
 
     return count
 
-def check_violations(name, tag, s_time, typ, df_after, d, available_days, preferences, holidays, season_max_matches=SEASON_MAX_MATCHES):
-    """Check all violations for a player assignment"""
+def check_violations(name, tag, s_time, typ, df_after, d, available_days, preferences, holidays, season_max_matches=SEASON_MAX_MATCHES, allow_twice_weekly=False):
+    """Check all violations for a player assignment
+
+    Args:
+        allow_twice_weekly: If True, skip the weekly limit check (allow player to play twice in one week)
+    """
     violations = []
 
     # Time conflict check - player cannot be in two places at once
@@ -369,12 +373,13 @@ def check_violations(name, tag, s_time, typ, df_after, d, available_days, prefer
     if day_count > 1:
         violations.append(f"{name}: max 1 Spiel/Tag überschritten ({day_count} Spiele am {d}).")
 
-    # Weekly limit check - max 1 match per week
+    # Weekly limit check - max 1 match per week (or 2 if allow_twice_weekly is True)
     # Note: df_after includes the current assignment, so count > 1 means player already has another match
     week_count = count_week(df_after, name, d)
-    if week_count > 1:
+    max_weekly = 2 if allow_twice_weekly else 1
+    if week_count > max_weekly:
         y, w = week_of(d)
-        violations.append(f"{name}: max 1 Spiel/Woche überschritten ({week_count} Spiele in Woche {w}/{y}).")
+        violations.append(f"{name}: max {max_weekly} Spiel/Woche überschritten ({week_count} Spiele in Woche {w}/{y}).")
 
     # Holiday check
     if is_holiday(name, d, holidays):
@@ -647,8 +652,12 @@ def select_doubles_team(candidates, num_players=4, max_rank_spread=3):
 
     return None
 
-def select_players_for_slot(df_plan, slot_info, all_players, available_days, preferences, holidays, max_singles_repeats=3, season_max_matches=SEASON_MAX_MATCHES):
-    """Select appropriate players for a slot. Returns (players, used_extended_rank)"""
+def select_players_for_slot(df_plan, slot_info, all_players, available_days, preferences, holidays, max_singles_repeats=3, season_max_matches=SEASON_MAX_MATCHES, allow_twice_weekly=False):
+    """Select appropriate players for a slot. Returns (players, used_extended_rank)
+
+    Args:
+        allow_twice_weekly: If True, allow players to play twice in one week (fallback mode)
+    """
     datum = slot_info["Datum"]
     tag = slot_info["Tag"]
     slot_code = slot_info["Slot"]
@@ -708,7 +717,7 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
         }])
         df_virtual = pd.concat([df_plan, virtual], ignore_index=True)
 
-        viol = check_violations(name, tag, slot_time, typ, df_virtual, datum, available_days, preferences, holidays, season_max_matches)
+        viol = check_violations(name, tag, slot_time, typ, df_virtual, datum, available_days, preferences, holidays, season_max_matches, allow_twice_weekly)
 
         candidates.append({
             "name": name,
@@ -771,6 +780,7 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
     filled_slots = []
     skipped_slots = []
     extended_rank_slots = []  # Track slots that used extended rank difference
+    twice_weekly_slots = []  # Track slots that used twice-weekly fallback
 
     for slot_info in empty_slots:
         if max_slots and filled_count >= max_slots:
@@ -877,7 +887,65 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
                                                         extended_rank_slots.append({**next_slot, "players": next_players})
                                                     break
 
-    return df_result, filled_slots, skipped_slots, extended_rank_slots
+    # Second pass: retry skipped slots with twice-weekly fallback
+    # This allows a player to play twice in one week when a slot cannot otherwise be filled
+    still_skipped = []
+    for slot_info in skipped_slots:
+        if max_slots and filled_count >= max_slots:
+            still_skipped.append(slot_info)
+            continue
+
+        # Try again with twice-weekly fallback enabled
+        players, used_extended = select_players_for_slot(
+            df_result, slot_info, all_players, available_days, preferences, holidays,
+            max_singles_repeats, season_max_matches, allow_twice_weekly=True
+        )
+
+        if players is None:
+            still_skipped.append(slot_info)
+            continue
+
+        # Check violations if only_legal (with twice-weekly allowed)
+        if only_legal:
+            time_match = re.search(r"(\d{2}:\d{2})", slot_info["Slot"])
+            slot_time = time_match.group(1) if time_match else "00:00"
+
+            has_violations = any(
+                check_violations(p, slot_info["Tag"], slot_time, slot_info["Typ"],
+                               df_result, slot_info["Datum"], available_days, preferences, holidays,
+                               season_max_matches, allow_twice_weekly=True)
+                for p in players
+            )
+            if has_violations:
+                still_skipped.append(slot_info)
+                continue
+
+        # Add new row
+        new_row = pd.DataFrame([{
+            "Datum": slot_info["Datum"].strftime("%Y-%m-%d"),
+            "Tag": slot_info["Tag"],
+            "Slot": slot_info["Slot"],
+            "Typ": slot_info["Typ"],
+            "Spieler": ", ".join(players),
+        }])
+
+        df_result = pd.concat([df_result, new_row], ignore_index=True)
+        df_result, _ = postprocess_plan(df_result[["Datum", "Tag", "Slot", "Typ", "Spieler"]])
+
+        filled_count += 1
+        filled_slots.append({**slot_info, "players": players})
+
+        # Track this slot as using twice-weekly fallback
+        twice_weekly_slots.append({**slot_info, "players": players})
+
+        # Track if this slot also used extended rank difference
+        if used_extended:
+            extended_rank_slots.append({**slot_info, "players": players})
+
+    # Update skipped_slots to only include truly unfillable slots
+    skipped_slots = still_skipped
+
+    return df_result, filled_slots, skipped_slots, extended_rank_slots, twice_weekly_slots
 
 # ==================== GITHUB FUNCTIONS ====================
 def github_headers():
@@ -1520,7 +1588,7 @@ with tab_auto:
         with col_preview:
             if st.button("🔍 Vorschau generieren", width='stretch', type="primary"):
                 with st.spinner("Generiere Auto-Population für 2026..."):
-                    df_result, filled, skipped, extended_rank = autopopulate_plan(
+                    df_result, filled, skipped, extended_rank, twice_weekly = autopopulate_plan(
                         st.session_state.df_work,
                         max_slots,
                         only_legal,
@@ -1535,6 +1603,7 @@ with tab_auto:
                     st.session_state.filled_slots = filled
                     st.session_state.skipped_slots = skipped
                     st.session_state.extended_rank_slots = extended_rank
+                    st.session_state.twice_weekly_slots = twice_weekly
                     st.rerun()
 
         with col_reset:
@@ -1544,6 +1613,7 @@ with tab_auto:
                 st.session_state.pop("filled_slots", None)
                 st.session_state.pop("skipped_slots", None)
                 st.session_state.pop("extended_rank_slots", None)
+                st.session_state.pop("twice_weekly_slots", None)
                 st.rerun()
 
         # Show results if available
@@ -1554,8 +1624,9 @@ with tab_auto:
             filled = st.session_state.get("filled_slots", [])
             skipped = st.session_state.get("skipped_slots", [])
             extended_rank = st.session_state.get("extended_rank_slots", [])
+            twice_weekly = st.session_state.get("twice_weekly_slots", [])
 
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.success(f"**{len(filled)}** Slots erfolgreich gefüllt")
             with col2:
@@ -1564,6 +1635,9 @@ with tab_auto:
             with col3:
                 if extended_rank:
                     st.info(f"**{len(extended_rank)}** mit erweiterter Rang-Differenz")
+            with col4:
+                if twice_weekly:
+                    st.info(f"**{len(twice_weekly)}** mit 2x/Woche Fallback")
 
             # Filled slots details
             if filled:
@@ -1634,6 +1708,23 @@ with tab_auto:
                             st.write(rank_info)
                         st.write("")
 
+            # Twice-weekly fallback slots
+            if twice_weekly:
+                with st.expander(f"🔄 Slots mit 2x/Woche Fallback ({len(twice_weekly)})", expanded=True):
+                    st.info("ℹ️ Diese Slots konnten nur durch Erlauben von 2 Spielen pro Woche für einen Spieler gefüllt werden")
+                    for slot in twice_weekly:
+                        players = slot["players"]
+                        typ = slot["Typ"]
+
+                        # Get player rankings
+                        player_ranks = [(p, RANK.get(p, "?")) for p in players]
+                        players_with_ranks = [f"{p} (Rang {r})" for p, r in player_ranks]
+                        players_str = ", ".join(players_with_ranks)
+
+                        st.write(f"**{slot['Datum']}** ({slot['Tag']}) — {slot['Slot']} — {slot['Typ']}")
+                        st.write(f"  → {players_str}")
+                        st.write("")
+
             # Statistics
             st.markdown("---")
             st.subheader("📊 Statistiken")
@@ -1675,6 +1766,8 @@ with tab_auto:
                         st.session_state.pop("df_result", None)
                         st.session_state.pop("filled_slots", None)
                         st.session_state.pop("skipped_slots", None)
+                        st.session_state.pop("extended_rank_slots", None)
+                        st.session_state.pop("twice_weekly_slots", None)
                     except Exception as e:
                         st.error(f"Fehler beim Speichern: {e}")
 
@@ -1696,6 +1789,7 @@ with tab_auto:
                     st.session_state.pop("filled_slots", None)
                     st.session_state.pop("skipped_slots", None)
                     st.session_state.pop("extended_rank_slots", None)
+                    st.session_state.pop("twice_weekly_slots", None)
                     st.rerun()
 
     else:
