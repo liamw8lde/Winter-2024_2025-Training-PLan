@@ -11,6 +11,7 @@ EDIT_PASSWORD = "tennis"  # protects editing features
 PLAN_FILE = "Winterplan_2026.csv"
 PREFS_FILE = "Spieler_Preferences_2026.csv"
 RANK_FILE = "Player_Ranks_2026.csv"
+SEASON_MAX_MATCHES = 13  # Maximum matches per player per season
 
 # ==================== DATA HELPERS ====================
 def postprocess_plan(df: pd.DataFrame):
