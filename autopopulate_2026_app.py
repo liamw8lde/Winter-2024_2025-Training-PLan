@@ -652,11 +652,13 @@ def select_doubles_team(candidates, num_players=4, max_rank_spread=3):
 
     return None
 
-def select_players_for_slot(df_plan, slot_info, all_players, available_days, preferences, holidays, max_singles_repeats=3, season_max_matches=SEASON_MAX_MATCHES, allow_twice_weekly=False):
+def select_players_for_slot(df_plan, slot_info, all_players, available_days, preferences, holidays, max_singles_repeats=3, season_max_matches=SEASON_MAX_MATCHES, allow_twice_weekly=False, max_rank_diff_singles=2, max_rank_spread_doubles=3):
     """Select appropriate players for a slot. Returns (players, used_extended_rank)
 
     Args:
         allow_twice_weekly: If True, allow players to play twice in one week (fallback mode)
+        max_rank_diff_singles: Maximum rank difference for singles pairings
+        max_rank_spread_doubles: Maximum rank spread for doubles teams
     """
     datum = slot_info["Datum"]
     tag = slot_info["Tag"]
@@ -749,21 +751,21 @@ def select_players_for_slot(df_plan, slot_info, all_players, available_days, pre
     # Select players - try with normal rank constraints only (no rank fallback)
     if typ.lower().startswith("einzel"):
         # Tier 1: Normal constraints
-        players = select_singles_pair(filtered, df_plan, max_rank_diff=2, max_singles_repeats=max_singles_repeats)
+        players = select_singles_pair(filtered, df_plan, max_rank_diff=max_rank_diff_singles, max_singles_repeats=max_singles_repeats)
         if players is not None:
             return players, False
         # Tier 2: Try with extended repetitions (+1), keep rank difference tight
-        players = select_singles_pair(filtered, df_plan, max_rank_diff=2, max_singles_repeats=max_singles_repeats + 1)
+        players = select_singles_pair(filtered, df_plan, max_rank_diff=max_rank_diff_singles, max_singles_repeats=max_singles_repeats + 1)
         if players is not None:
             return players, False  # Not extended rank, just extended repetitions
         return None, False
     else:
-        players = select_doubles_team(filtered, num_players, max_rank_spread=3)
+        players = select_doubles_team(filtered, num_players, max_rank_spread=max_rank_spread_doubles)
         if players is not None:
             return players, False
         return None, False
 
-def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_days, preferences, holidays, max_singles_repeats=3, season_max_matches=SEASON_MAX_MATCHES):
+def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_days, preferences, holidays, max_singles_repeats=3, season_max_matches=SEASON_MAX_MATCHES, max_rank_diff_singles=2, max_rank_spread_doubles=3):
     """Main autopopulation function"""
     df_result = df_plan.copy()
     empty_slots = find_empty_slots(df_result)
@@ -778,7 +780,8 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
             break
 
         players, used_extended = select_players_for_slot(
-            df_result, slot_info, all_players, available_days, preferences, holidays, max_singles_repeats, season_max_matches
+            df_result, slot_info, all_players, available_days, preferences, holidays, max_singles_repeats, season_max_matches,
+            max_rank_diff_singles=max_rank_diff_singles, max_rank_spread_doubles=max_rank_spread_doubles
         )
 
         if players is None:
@@ -843,7 +846,8 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
                                     if next_slot_time == slot_time:
                                         # Try to schedule the partner in this slot
                                         next_players, next_used_extended = select_players_for_slot(
-                                            df_result, next_slot, all_players, available_days, preferences, holidays, max_singles_repeats, season_max_matches
+                                            df_result, next_slot, all_players, available_days, preferences, holidays, max_singles_repeats, season_max_matches,
+                                            max_rank_diff_singles=max_rank_diff_singles, max_rank_spread_doubles=max_rank_spread_doubles
                                         )
 
                                         # Check if partner is in the selected players
@@ -881,7 +885,8 @@ def autopopulate_plan(df_plan, max_slots, only_legal, all_players, available_day
         # Try again with twice-weekly fallback enabled
         players, used_extended = select_players_for_slot(
             df_result, slot_info, all_players, available_days, preferences, holidays,
-            max_singles_repeats, season_max_matches, allow_twice_weekly=True
+            max_singles_repeats, season_max_matches, allow_twice_weekly=True,
+            max_rank_diff_singles=max_rank_diff_singles, max_rank_spread_doubles=max_rank_spread_doubles
         )
 
         if players is None:
@@ -1560,6 +1565,25 @@ with tab_auto:
                 help="Maximale Anzahl Spiele pro Spieler für die gesamte Saison (Standard: 13)"
             )
 
+        # Rank difference settings
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            max_rank_diff_singles = st.number_input(
+                "Max. Rang-Differenz (Einzel)",
+                min_value=1,
+                max_value=6,
+                value=2,
+                help="Maximale Rang-Differenz zwischen zwei Spielern im Einzel (Standard: 2)"
+            )
+        with col_r2:
+            max_rank_spread_doubles = st.number_input(
+                "Max. Rang-Differenz (Doppel)",
+                min_value=1,
+                max_value=6,
+                value=3,
+                help="Maximale Rang-Differenz zwischen Spielern im Doppel (Standard: 3)"
+            )
+
         st.markdown("---")
 
         # Actions
@@ -1576,7 +1600,9 @@ with tab_auto:
                         preferences,
                         holidays,
                         max_singles_repeats,
-                        season_max_matches
+                        season_max_matches,
+                        max_rank_diff_singles,
+                        max_rank_spread_doubles
                     )
                     st.session_state.df_result = df_result
                     st.session_state.filled_slots = filled
